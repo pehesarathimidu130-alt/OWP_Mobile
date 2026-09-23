@@ -1,0 +1,40 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import '../features/auth/screens/login_screen.dart';
+import '../features/auth/screens/onboarding_screen.dart';
+import '../features/auth/screens/register_screen.dart';
+import '../features/auth/screens/splash_screen.dart';
+
+final GoRouter appRouter = GoRouter(
+  initialLocation: '/splash',
+  routes: [
+    GoRoute(
+      path: '/splash',
+      builder: (context, state) => const SplashScreen(),
+    ),
+    GoRoute(
+      path: '/onboarding',
+      builder: (context, state) => const OnboardingScreen(),
+    ),
+    GoRoute(
+      path: '/login',
+      builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/register',
+      builder: (context, state) => const RegisterScreen(),
+    ),
+    GoRoute(
+      path: '/forgot-password',
+      builder: (context, state) => const Scaffold(
+        body: Center(child: Text('Forgot Password Screen (Placeholder)')),
+      ),
+    ),
+    GoRoute(
+      path: '/home',
+      builder: (context, state) => const Scaffold(
+        body: Center(child: Text('Home Screen (Placeholder)')),
+      ),
+    ),
+  ],
+);
