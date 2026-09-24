@@ -18,7 +18,7 @@ class ApiException implements Exception {
 /// Shared API client for HTTP communication with OWP_Backend.
 class ApiClient {
   // TODO: Supply real OWP_Backend URL once deployed
-  static const String baseUrl = 'http://192.168.8.156:5131/api';
+  static const String baseUrl = 'http://192.168.1.2:5131/api';
 
   final http.Client _httpClient;
   final FlutterSecureStorage _storage;

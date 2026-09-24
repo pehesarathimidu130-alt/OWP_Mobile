@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -66,6 +67,13 @@ class _SplashScreenState extends State<SplashScreen>
     // 2. Check Onboarding Flag
     try {
       final prefs = await SharedPreferences.getInstance();
+      // TODO: Remove or guard this before the final submission build.
+      if (kDebugMode) {
+        // TEMP: forces onboarding to show on every launch during
+        // development. Remove or guard this before the final submission
+        // build.
+        await prefs.remove('hasSeenOnboarding');
+      }
       hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;
     } catch (_) {
       hasSeenOnboarding = false;
