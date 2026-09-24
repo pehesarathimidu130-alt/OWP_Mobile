@@ -36,6 +36,10 @@ class Listing {
     this.isFavorite = false,
   });
 
+  /// Convenience rating delegating to parent vendor rating
+  double get rating => vendor.rating;
+  int get reviewCount => vendor.reviewCount;
+
   /// Human-readable price formatted in Sri Lankan Rupees (LKR) or 'Price on request'
   String get formattedPrice {
     if (isPriceOnRequest || priceFrom <= 0) return 'Price on request';

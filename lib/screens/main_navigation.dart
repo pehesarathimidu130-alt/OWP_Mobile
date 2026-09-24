@@ -54,7 +54,7 @@ class _MainNavigationState extends State<MainNavigation> {
   List<Widget> _buildScreens() => [
         HomeScreen(onExploreTap: () => setState(() => _selectedIndex = 1)),
         const ExploreScreen(),
-        const FavoritesScreen(),
+        FavoritesScreen(onExploreTap: () => setState(() => _selectedIndex = 1)),
         const InquiriesScreen(),
         const ProfileScreen(),
       ];

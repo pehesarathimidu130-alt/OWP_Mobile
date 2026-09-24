@@ -1,172 +1,304 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../details/vendor_details_screen.dart';
-import '../../data/dummy_vendors.dart';
-import '../../models/vendor.dart';
+import 'package:provider/provider.dart';
+import '../../core/auth_provider.dart';
+import '../../core/favorites_provider.dart';
+import '../../core/theme.dart';
+import '../../widgets/listing_card.dart';
 
-/// Favorites screen – shows all vendors the user has marked as favourite.
+/// Dynamic "My Favourites" screen showing saved listings from the Neon PostgreSQL database.
 class FavoritesScreen extends StatefulWidget {
-  const FavoritesScreen({super.key});
+  final VoidCallback? onExploreTap;
+
+  const FavoritesScreen({super.key, this.onExploreTap});
 
   @override
   State<FavoritesScreen> createState() => _FavoritesScreenState();
 }
 
 class _FavoritesScreenState extends State<FavoritesScreen> {
-  late List<Vendor> _favorites;
-
   @override
   void initState() {
     super.initState();
-    _favorites = dummyVendors.where((v) => v.isFavorite).toList();
-  }
-
-  void _removeFavorite(Vendor vendor) {
-    setState(() {
-      vendor.isFavorite = false;
-      _favorites.remove(vendor);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        final authProvider = context.read<AuthProvider>();
+        if (authProvider.isAuthenticated) {
+          context.read<FavoritesProvider>().fetchFavorites();
+        }
+      }
     });
   }
 
+  void _navigateToExplore(BuildContext context) {
+    if (widget.onExploreTap != null) {
+      widget.onExploreTap!();
+    } else {
+      context.go('/explore');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final authProvider = context.watch<AuthProvider>();
+    final favProvider = context.watch<FavoritesProvider>();
+    final isAuthenticated = authProvider.isAuthenticated;
+
     return Scaffold(
-      backgroundColor: const Color(0xFFFFF5F9),
+      backgroundColor: const Color(0xFFFAF8F6),
       appBar: AppBar(
         title: Text(
           'My Favourites',
-          style: GoogleFonts.playfairDisplay(fontWeight: FontWeight.w700),
+          style: GoogleFonts.playfairDisplay(
+            fontWeight: FontWeight.w700,
+            fontSize: 22,
+            color: OleenaTheme.textDark,
+          ),
         ),
-      ),
-      body: _favorites.isEmpty
-          ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Icon(Icons.favorite_border,
-                      size: 64, color: Color(0xFFE8A0BF)),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No favourites yet',
-                    style: GoogleFonts.playfairDisplay(
-                      fontSize: 20,
-                      color: const Color(0xFF9E6B8A),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap the ❤️ on any vendor to save them here.',
-                    style: GoogleFonts.lato(color: const Color(0xFFBB8FAE)),
-                  ),
-                ],
-              ),
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: _favorites.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (_, i) {
-                final vendor = _favorites[i];
-                return _FavoriteListTile(
-                  vendor: vendor,
-                  onRemove: () => _removeFavorite(vendor),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => VendorDetailsScreen(
-                        vendor: vendor,
-                        onFavoriteToggled: () => _removeFavorite(vendor),
-                      ),
-                    ),
-                  ),
-                );
-              },
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        actions: [
+          if (isAuthenticated)
+            IconButton(
+              icon: const Icon(Icons.refresh_rounded, color: OleenaTheme.primary),
+              tooltip: 'Refresh favourites',
+              onPressed: () => favProvider.fetchFavorites(),
             ),
+        ],
+      ),
+      body: SafeArea(
+        child: _buildContent(context, isAuthenticated, favProvider),
+      ),
     );
   }
-}
 
-class _FavoriteListTile extends StatelessWidget {
-  final Vendor vendor;
-  final VoidCallback onRemove;
-  final VoidCallback onTap;
-
-  const _FavoriteListTile({
-    required this.vendor,
-    required this.onRemove,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      child: InkWell(
-        borderRadius: BorderRadius.circular(20),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Row(
+  Widget _buildContent(
+    BuildContext context,
+    bool isAuthenticated,
+    FavoritesProvider favProvider,
+  ) {
+    // 1. Unauthenticated State
+    if (!isAuthenticated) {
+      return Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(14),
-                child: Image.network(
-                  vendor.imageUrl,
-                  width: 80,
-                  height: 80,
-                  fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => Container(
-                    width: 80,
-                    height: 80,
-                    color: const Color(0xFFF8BBD9),
+              Container(
+                width: 90,
+                height: 90,
+                decoration: const BoxDecoration(
+                  color: OleenaTheme.primaryTint,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.favorite_border_rounded,
+                  size: 46,
+                  color: OleenaTheme.primary,
+                ),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                'Save Your Favourites',
+                style: GoogleFonts.playfairDisplay(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: OleenaTheme.textDark,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                'Log in to view your saved favorites, shortlist dream packages, and sync across all your devices.',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: OleenaTheme.textMuted,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 28),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: () => context.push('/login'),
+                  icon: const Icon(Icons.login_rounded, size: 18),
+                  label: Text(
+                    'Log In to View Favourites',
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: OleenaTheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 0,
                   ),
                 ),
-              ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      vendor.name,
-                      style: GoogleFonts.playfairDisplay(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFF3D0C2E),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${vendor.categoryIcon}  ${vendor.category}',
-                      style: GoogleFonts.lato(
-                        fontSize: 12,
-                        color: const Color(0xFFB03A6E),
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        const Icon(Icons.star_rounded,
-                            color: Color(0xFFFFC107), size: 14),
-                        Text(
-                          ' ${vendor.rating}  ·  ${vendor.formattedPrice}',
-                          style: GoogleFonts.lato(
-                            fontSize: 12,
-                            color: const Color(0xFF9E6B8A),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.favorite_rounded,
-                    color: Color(0xFFE91E63)),
-                onPressed: onRemove,
-                tooltip: 'Remove from favourites',
               ),
             ],
           ),
         ),
+      );
+    }
+
+    // 2. Loading State
+    if (favProvider.isLoading && favProvider.favoriteListings.isEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(OleenaTheme.primary),
+              strokeWidth: 3,
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Loading your saved favourites...',
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: OleenaTheme.textMuted,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 3. Error State
+    if (favProvider.errorMessage != null && favProvider.favoriteListings.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.cloud_off_rounded, size: 54, color: Colors.grey),
+              const SizedBox(height: 16),
+              Text(
+                'Unable to Load Favourites',
+                style: GoogleFonts.playfairDisplay(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: OleenaTheme.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                favProvider.errorMessage!,
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(fontSize: 12, color: OleenaTheme.textMuted),
+              ),
+              const SizedBox(height: 20),
+              ElevatedButton.icon(
+                onPressed: () => favProvider.fetchFavorites(),
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Try Again'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: OleenaTheme.primary,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 4. Empty State
+    if (favProvider.favoriteListings.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  color: Colors.pink.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.favorite_border_rounded,
+                  size: 46,
+                  color: Color(0xFFE57373),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'No favorites yet',
+                style: GoogleFonts.playfairDisplay(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: OleenaTheme.textDark,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Start exploring wedding packages and tap the heart icon to save your favourites!',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: OleenaTheme.textMuted,
+                  height: 1.4,
+                ),
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: () => _navigateToExplore(context),
+                icon: const Icon(Icons.explore_rounded, size: 18),
+                label: Text(
+                  'Start Exploring',
+                  style: GoogleFonts.poppins(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: OleenaTheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 5. Populated State (renders using exact same ListingCard)
+    final items = favProvider.favoriteListings;
+    return RefreshIndicator(
+      onRefresh: () => favProvider.fetchFavorites(),
+      color: OleenaTheme.primary,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        padding: const EdgeInsets.all(16),
+        itemCount: items.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 16),
+        itemBuilder: (context, index) {
+          final listing = items[index];
+          return ListingCard(
+            key: ValueKey(listing.serviceId),
+            listing: listing,
+          );
+        },
       ),
     );
   }
