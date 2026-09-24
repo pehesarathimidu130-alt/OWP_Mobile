@@ -1,5 +1,5 @@
-import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../features/auth/screens/forgot_password_screen.dart';
 import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/register_screen.dart';
@@ -29,9 +29,7 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/forgot-password',
-      builder: (context, state) => const Scaffold(
-        body: Center(child: Text('Forgot Password Screen (Placeholder)')),
-      ),
+      builder: (context, state) => const ForgotPasswordScreen(),
     ),
     GoRoute(
       path: '/home',

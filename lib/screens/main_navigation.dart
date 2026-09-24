@@ -6,7 +6,7 @@ import 'explore/explore_screen.dart';
 import 'favorites/favorites_screen.dart';
 import 'home/home_screen.dart';
 import 'placeholders/inquiries_screen.dart';
-import 'placeholders/profile_placeholder_screen.dart';
+import 'profile/profile_screen.dart';
 
 /// Root navigation shell with a 5-tab BottomNavigationBar.
 ///
