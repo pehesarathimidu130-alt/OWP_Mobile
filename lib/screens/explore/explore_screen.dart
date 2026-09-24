@@ -1,0 +1,521 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../../core/api_service.dart';
+import '../../core/auth_provider.dart';
+import '../../core/favorites_provider.dart';
+import '../../core/theme.dart';
+import '../../models/listing_model.dart';
+import '../../widgets/listing_card.dart';
+
+/// Primary discovery screen showing specific business services (listings) added by vendors.
+class ExploreScreen extends StatefulWidget {
+  const ExploreScreen({super.key});
+
+  @override
+  State<ExploreScreen> createState() => _ExploreScreenState();
+}
+
+class _ExploreScreenState extends State<ExploreScreen> {
+  final ApiService _apiService = ApiService();
+  final TextEditingController _searchController = TextEditingController();
+
+  List<Listing> _allListings = [];
+  List<Listing> _filteredListings = [];
+  bool _isLoading = true;
+  String? _errorMessage;
+  String _selectedCategory = 'All';
+
+  static const List<String> _categories = [
+    'All',
+    'Hotel / Venue',
+    'Photography',
+    'Decorations',
+    'Catering',
+    'Music',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchListings();
+    _searchController.addListener(_applyFilters);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && context.read<AuthProvider>().isAuthenticated) {
+        context.read<FavoritesProvider>().fetchFavorites();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  /// Sends a GET request to /api/listings
+  Future<void> _fetchListings() async {
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final listings = await _apiService.fetchListings();
+      if (!mounted) return;
+
+      setState(() {
+        _allListings = listings;
+        _isLoading = false;
+        _errorMessage = null;
+      });
+      _applyFilters();
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.message;
+        _allListings = [];
+        _filteredListings = [];
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _errorMessage = 'An error occurred while loading listings: $e';
+        _allListings = [];
+        _filteredListings = [];
+      });
+    }
+  }
+
+  void _applyFilters() {
+    final query = _searchController.text.trim().toLowerCase();
+
+    setState(() {
+      _filteredListings = _allListings.where((item) {
+        final matchesQuery = query.isEmpty ||
+            item.title.toLowerCase().contains(query) ||
+            item.category.toLowerCase().contains(query) ||
+            item.shortDescription.toLowerCase().contains(query) ||
+            item.vendor.name.toLowerCase().contains(query) ||
+            item.vendor.location.toLowerCase().contains(query);
+
+        final matchesCategory = _selectedCategory == 'All' ||
+            item.category.toLowerCase().contains(_selectedCategory.toLowerCase());
+
+        return matchesQuery && matchesCategory;
+      }).toList();
+    });
+  }
+
+  void _onCategorySelected(String category) {
+    setState(() {
+      _selectedCategory = category;
+    });
+    _applyFilters();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFFBF9F7),
+      appBar: AppBar(
+        backgroundColor: Colors.white,
+        elevation: 0,
+        scrolledUnderElevation: 1,
+        title: Text(
+          'Explore Listings',
+          style: GoogleFonts.playfairDisplay(
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            color: OleenaTheme.textDark,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: OleenaTheme.primary),
+            tooltip: 'Refresh listings',
+            onPressed: _fetchListings,
+          ),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ── Search & Category Filter Header ──
+            Container(
+              color: Colors.white,
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+              child: Column(
+                children: [
+                  // Search Bar
+                  TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      hintText: 'Search packages, venues, photography...',
+                      hintStyle: GoogleFonts.poppins(
+                        fontSize: 13,
+                        color: Colors.grey.shade500,
+                      ),
+                      prefixIcon: const Icon(Icons.search, size: 20, color: OleenaTheme.primary),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear, size: 18),
+                              onPressed: () => _searchController.clear(),
+                            )
+                          : null,
+                      filled: true,
+                      fillColor: const Color(0xFFF5F3F1),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 0, horizontal: 16),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide.none,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+
+                  // Category Filter Chips
+                  SizedBox(
+                    height: 38,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _categories.length,
+                      separatorBuilder: (context, index) => const SizedBox(width: 8),
+                      itemBuilder: (context, index) {
+                        final cat = _categories[index];
+                        final isSelected = _selectedCategory == cat;
+                        return ChoiceChip(
+                          label: Text(cat),
+                          selected: isSelected,
+                          onSelected: (_) => _onCategorySelected(cat),
+                          labelStyle: GoogleFonts.poppins(
+                            fontSize: 12,
+                            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
+                            color: isSelected ? Colors.white : OleenaTheme.textDark,
+                          ),
+                          selectedColor: OleenaTheme.primary,
+                          backgroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(20),
+                            side: BorderSide(
+                              color: isSelected ? OleenaTheme.primary : Colors.grey.shade300,
+                            ),
+                          ),
+                          showCheckmark: false,
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // ── Main Content Area ──
+            Expanded(
+              child: _buildBody(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBody() {
+    // 1. Loading State
+    if (_isLoading) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(OleenaTheme.primary),
+              strokeWidth: 3,
+            ),
+            const SizedBox(height: 18),
+            Text(
+              'Loading live vendor packages...',
+              style: GoogleFonts.poppins(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    // 2. Error State
+    if (_errorMessage != null) {
+      return Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  color: Colors.red.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  Icons.cloud_off_rounded,
+                  size: 40,
+                  color: Colors.red.shade400,
+                ),
+              ),
+              const SizedBox(height: 20),
+              Text(
+                'Unable to Load Listings',
+                style: GoogleFonts.playfairDisplay(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: OleenaTheme.textDark,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 10),
+              Text(
+                _errorMessage!,
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  color: Colors.grey.shade600,
+                  height: 1.5,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              ElevatedButton.icon(
+                onPressed: _fetchListings,
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('Try Again'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: OleenaTheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 3. Empty State
+    if (_filteredListings.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(Icons.search_off_rounded, size: 56, color: Colors.grey.shade400),
+              const SizedBox(height: 16),
+              Text(
+                'No listings found',
+                style: GoogleFonts.playfairDisplay(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: OleenaTheme.textDark,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Try adjusting your search terms or category filters.',
+                style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    // 4. Listings List
+    return RefreshIndicator(
+      onRefresh: _fetchListings,
+      color: OleenaTheme.primary,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+        padding: const EdgeInsets.all(16),
+        itemCount: _filteredListings.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 16),
+        itemBuilder: (context, index) {
+          final listing = _filteredListings[index];
+          return ListingCard(listing: listing);
+        },
+      ),
+  }
+}
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.04),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Image with Category Tag & Favorite Toggle
+            Stack(
+              children: [
+                AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.network(
+                    listing.coverImageUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) => Container(
+                      color: Colors.grey.shade200,
+                      child: Center(
+                        child: Icon(Icons.image_not_supported_outlined,
+                            size: 40, color: Colors.grey.shade400),
+                      ),
+                    ),
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        color: Colors.grey.shade100,
+                        child: const Center(
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(OleenaTheme.primary),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+
+                // Category Tag
+                Positioned(
+                  top: 12,
+                  left: 12,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.65),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      listing.category,
+                      style: GoogleFonts.poppins(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Favorite Toggle Button
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      onTap: onFavoriteToggled,
+                      borderRadius: BorderRadius.circular(20),
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.9),
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          listing.isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                          size: 18,
+                          color: listing.isFavorite ? Colors.red : OleenaTheme.textDark,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+
+            // Listing Info
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Service Title
+                  Text(
+                    listing.title,
+                    style: GoogleFonts.playfairDisplay(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: OleenaTheme.textDark,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 6),
+
+                  // Parent Vendor & Location Row
+                  Row(
+                    children: [
+                      const Icon(Icons.storefront_outlined, size: 14, color: OleenaTheme.primary),
+                      const SizedBox(width: 4),
+                      Expanded(
+                        child: Text(
+                          '${listing.vendor.name} • ${listing.vendor.location}',
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: OleenaTheme.textMuted,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      // Rating
+                      Row(
+                        children: [
+                          const Icon(Icons.star_rounded, size: 16, color: Color(0xFFF59E0B)),
+                          const SizedBox(width: 2),
+                          Text(
+                            listing.vendor.rating.toStringAsFixed(1),
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: OleenaTheme.textDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  // Price
+                  Text(
+                    listing.formattedPrice,
+                    style: GoogleFonts.poppins(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
+                      color: OleenaTheme.primary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

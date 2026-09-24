@@ -104,37 +104,67 @@ class _RegisterScreenState extends State<RegisterScreen> {
     });
 
     try {
-      await context.read<AuthProvider>().register({
+      final payload = {
+        'fullName': _nameController.text.trim(),
         'name': _nameController.text.trim(),
         'email': _emailController.text.trim(),
+        'phoneNumber': _phoneController.text.trim(),
         'phone': _phoneController.text.trim(),
         'password': _passwordController.text,
-      });
+      };
+
+      await context.read<AuthProvider>().register(payload);
 
       if (!mounted) return;
-      context.go('/home');
-    } on UnimplementedError {
-      if (!mounted) return;
+
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text("Registration isn't connected to the backend yet."),
+        SnackBar(
+          content: const Row(
+            children: [
+              Icon(Icons.check_circle_outline, color: Colors.white),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('Account created successfully! Welcome to Oleena.'),
+              ),
+            ],
+          ),
+          backgroundColor: Colors.green.shade700,
           behavior: SnackBarBehavior.floating,
         ),
       );
+
+      // Redirect to home screen on success (200/201)
+      context.go('/home');
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(e.message),
+          content: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.error_outline, color: Colors.white),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  e.message,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
           backgroundColor: Colors.red.shade700,
           behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 4),
         ),
       );
-    } catch (_) {
+    } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Something went wrong. Please try again.'),
+          content: Text('Registration failed: $e'),
           backgroundColor: Colors.red.shade700,
           behavior: SnackBarBehavior.floating,
         ),

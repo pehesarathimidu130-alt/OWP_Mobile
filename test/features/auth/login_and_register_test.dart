@@ -13,6 +13,18 @@ class MockAuthProvider extends ChangeNotifier implements AuthProvider {
   bool isAuthenticated = false;
   @override
   String? token;
+  @override
+  String? fullName;
+  @override
+  String? email;
+  @override
+  String? role;
+  @override
+  int? customerId;
+  @override
+  String get displayName => fullName ?? 'Oleena Member';
+  @override
+  String get userInitials => 'OM';
 
   String? lastLoginEmail;
   String? lastLoginPassword;

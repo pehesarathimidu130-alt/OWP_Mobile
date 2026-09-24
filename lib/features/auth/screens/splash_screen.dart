@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
@@ -51,35 +50,19 @@ class _SplashScreenState extends State<SplashScreen>
 
   Future<void> _checkStateAndNavigate() async {
     final startTime = DateTime.now();
-    bool isAuthenticated = false;
     bool hasSeenOnboarding = false;
 
-    // 1. Check Auth Status (silent failure fallback)
-    try {
-      final authProvider = context.read<AuthProvider>();
-      await authProvider.checkAuthStatus();
-      isAuthenticated = authProvider.isAuthenticated;
-    } catch (_) {
-      // If checkAuthStatus() throws, treat as unauthenticated silently
-      isAuthenticated = false;
-    }
-
-    // 2. Check Onboarding Flag
+    // 1. Check Onboarding Flag ONLY (never check auth token to block startup)
     try {
       final prefs = await SharedPreferences.getInstance();
-      // TODO: Remove or guard this before the final submission build.
-      if (kDebugMode) {
-        // TEMP: forces onboarding to show on every launch during
-        // development. Remove or guard this before the final submission
-        // build.
-        await prefs.remove('hasSeenOnboarding');
-      }
       hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;
+      // Silently restore cached session in background so profile data is ready
+      context.read<AuthProvider>().checkAuthStatus();
     } catch (_) {
       hasSeenOnboarding = false;
     }
 
-    // 3. Minimum ~1.2s display before navigating
+    // 2. Minimum ~1.2s display before navigating for brand presentation
     final elapsed = DateTime.now().difference(startTime);
     const minDelay = Duration(milliseconds: 1200);
     if (elapsed < minDelay) {
@@ -88,13 +71,11 @@ class _SplashScreenState extends State<SplashScreen>
 
     if (!mounted) return;
 
-    // 4. Navigate via context.go(...) replacing splash
+    // 3. Navigate directly to Onboarding or MainNavigation (Home). Never force login.
     if (!hasSeenOnboarding) {
       context.go('/onboarding');
-    } else if (isAuthenticated) {
-      context.go('/home');
     } else {
-      context.go('/login');
+      context.go('/home');
     }
   }
 
