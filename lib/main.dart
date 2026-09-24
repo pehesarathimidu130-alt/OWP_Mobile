@@ -5,6 +5,8 @@ import 'core/app_router.dart';
 import 'core/auth_provider.dart';
 import 'core/favorites_provider.dart';
 import 'core/theme.dart';
+import 'features/profile/providers/customer_profile_provider.dart';
+import 'features/profile/providers/notification_preferences_provider.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -24,6 +26,8 @@ class OleenaApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => FavoritesProvider()),
+        ChangeNotifierProvider(create: (_) => CustomerProfileProvider()),
+        ChangeNotifierProvider(create: (_) => NotificationPreferencesProvider()),
       ],
       child: MaterialApp.router(
         title: 'Oleena Wedding Planner',

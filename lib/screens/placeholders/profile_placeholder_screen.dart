@@ -290,36 +290,40 @@ class _MenuItem extends StatelessWidget {
           ),
         ],
       ),
-      child: ListTile(
-        onTap: onTap,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
-        leading: Container(
-          padding: const EdgeInsets.all(8),
-          decoration: const BoxDecoration(
-            color: OleenaTheme.primaryTint,
-            shape: BoxShape.circle,
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        child: ListTile(
+          onTap: onTap,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 18, vertical: 4),
+          leading: Container(
+            padding: const EdgeInsets.all(8),
+            decoration: const BoxDecoration(
+              color: OleenaTheme.primaryTint,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: OleenaTheme.primary, size: 20),
           ),
-          child: Icon(icon, color: OleenaTheme.primary, size: 20),
-        ),
-        title: Text(
-          title,
-          style: GoogleFonts.poppins(
-            fontSize: 14,
-            fontWeight: FontWeight.w600,
-            color: OleenaTheme.textDark,
+          title: Text(
+            title,
+            style: GoogleFonts.poppins(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: OleenaTheme.textDark,
+            ),
           ),
+          subtitle: subtitle != null
+              ? Text(
+                  subtitle!,
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: OleenaTheme.textMuted,
+                  ),
+                )
+              : null,
+          trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         ),
-        subtitle: subtitle != null
-            ? Text(
-                subtitle!,
-                style: GoogleFonts.poppins(
-                  fontSize: 12,
-                  color: OleenaTheme.textMuted,
-                ),
-              )
-            : null,
-        trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey, size: 20),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
     );
   }
