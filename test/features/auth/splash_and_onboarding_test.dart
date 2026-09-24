@@ -15,8 +15,20 @@ class FakeAuthProvider extends ChangeNotifier implements AuthProvider {
   bool isAuthenticated;
   @override
   String? token;
+  @override
+  String? fullName;
+  @override
+  String? email;
+  @override
+  String? role;
+  @override
+  int? customerId;
+  @override
+  String get displayName => fullName ?? 'Oleena Member';
+  @override
+  String get userInitials => 'OM';
 
-  FakeAuthProvider({this.isAuthenticated = false, this.token});
+  FakeAuthProvider({this.isAuthenticated = false, this.token, this.fullName, this.email});
 
   @override
   Future<void> checkAuthStatus() async {}

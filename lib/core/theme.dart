@@ -10,6 +10,7 @@ class OleenaTheme {
   static const Color background = Color(0xFFFFFFFF); // White
   static const Color backgroundSecondary = Color(0xFFF9FAFB); // Off-white
   static const Color textDark = Color(0xFF1F1F2E);
+  static const Color textPrimary = textDark;
   static const Color textMuted = Color(0xFF8A8A9A);
   static const Color borderSubtle = Color(0xFFE8E8EE);
 

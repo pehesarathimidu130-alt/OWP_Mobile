@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../../core/auth_gate.dart';
 import '../../models/vendor.dart';
 import '../placeholders/inquiries_screen.dart';
 
@@ -55,9 +56,16 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
   }
 
   void _toggleHeart() {
-    setState(() => _isFavorite = !_isFavorite);
-    _heartCtrl.forward(from: 0);
-    widget.onFavoriteToggled();
+    requireLogin(
+      context,
+      reason: 'Sign in to save ${widget.vendor.name} to your favourites',
+      icon: Icons.favorite_border_rounded,
+      onSuccess: () {
+        setState(() => _isFavorite = !_isFavorite);
+        _heartCtrl.forward(from: 0);
+        widget.onFavoriteToggled();
+      },
+    );
   }
 
   @override
@@ -194,9 +202,15 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
               heartScale: _heartScale,
               onHeart: _toggleHeart,
               onCancel: () => Navigator.of(context).pop(),
-              onShare: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                    builder: (_) => const InquiriesScreen(fromDetails: true)),
+              onShare: () => requireLogin(
+                context,
+                reason: 'Sign in to send inquiries to ${vendor.name}',
+                icon: Icons.chat_bubble_outline_rounded,
+                onSuccess: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => const InquiriesScreen(fromDetails: true),
+                  ),
+                ),
               ),
             ),
           ),

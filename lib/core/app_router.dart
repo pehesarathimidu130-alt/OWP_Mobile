@@ -5,6 +5,9 @@ import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/register_screen.dart';
 import '../features/auth/screens/splash_screen.dart';
 
+import '../screens/explore/explore_screen.dart';
+import '../screens/main_navigation.dart';
+
 final GoRouter appRouter = GoRouter(
   initialLocation: '/splash',
   routes: [
@@ -32,9 +35,15 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/home',
-      builder: (context, state) => const Scaffold(
-        body: Center(child: Text('Home Screen (Placeholder)')),
-      ),
+      builder: (context, state) => const MainNavigation(),
+    ),
+    GoRoute(
+      path: '/explore',
+      builder: (context, state) => const ExploreScreen(),
+    ),
+    GoRoute(
+      path: '/favorites',
+      builder: (context, state) => const MainNavigation(initialIndex: 2),
     ),
   ],
 );
