@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../core/auth_gate.dart';
+import '../../core/favorites_provider.dart';
 import '../../core/theme.dart';
 import '../../models/listing_model.dart';
 import '../placeholders/inquiries_screen.dart';
@@ -8,12 +10,12 @@ import '../placeholders/inquiries_screen.dart';
 /// Detailed view for a specific business service / package added by a vendor.
 class ListingDetailsScreen extends StatefulWidget {
   final Listing listing;
-  final VoidCallback onFavoriteToggled;
+  final VoidCallback? onFavoriteToggled;
 
   const ListingDetailsScreen({
     super.key,
     required this.listing,
-    required this.onFavoriteToggled,
+    this.onFavoriteToggled,
   });
 
   @override
@@ -55,10 +57,21 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
       context,
       reason: 'Sign in to save ${widget.listing.title} to your favourites',
       icon: Icons.favorite_border_rounded,
-      onSuccess: () {
-        setState(() => _isFavorite = !_isFavorite);
+      onSuccess: () async {
         _heartCtrl.forward(from: 0);
-        widget.onFavoriteToggled();
+        try {
+          final newState = await context.read<FavoritesProvider>().toggleFavorite(widget.listing);
+          if (mounted) {
+            setState(() => _isFavorite = newState);
+          }
+          widget.onFavoriteToggled?.call();
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Could not update favourite: $e')),
+            );
+          }
+        }
       },
     );
   }

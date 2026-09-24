@@ -54,10 +54,14 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
 
     // 1. Auth Gate: Check if user is authenticated
     if (!authProvider.isAuthenticated) {
-      requireLogin(context, () {
-        // Callback after login successful: retry toggle
-        _handleFavoriteTap(context);
-      });
+      await requireLogin(
+        context,
+        reason: 'Sign in to save ${widget.listing.title} to your favourites',
+        icon: Icons.favorite_border_rounded,
+        onSuccess: () {
+          _handleFavoriteTap(context);
+        },
+      );
       return;
     }
 
@@ -66,9 +70,6 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
 
     // Trigger bounce micro-animation
     _animController.forward(from: 0.0);
-
-    final currentFav = favProvider.isFavorite(widget.listing.serviceId);
-    final targetFav = !currentFav;
 
     try {
       // 2. Optimistic UI Update & Background Sync via Provider

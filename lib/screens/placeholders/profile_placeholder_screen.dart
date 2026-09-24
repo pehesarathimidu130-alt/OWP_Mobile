@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth_provider.dart';
+import '../../core/favorites_provider.dart';
 import '../../core/theme.dart';
 
 /// Dynamic Profile Screen showing real user profile details from backend/auth state.
@@ -228,6 +229,7 @@ class ProfileScreen extends StatelessWidget {
                     onPressed: () async {
                       await authProvider.logout();
                       if (context.mounted) {
+                        context.read<FavoritesProvider>().clear();
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('Logged out successfully.'),
