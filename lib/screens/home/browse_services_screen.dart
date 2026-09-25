@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../models/vendor.dart';
+import '../../core/api_service.dart';
 import '../../data/dummy_vendors.dart';
+import '../../models/vendor.dart';
 import '../details/vendor_details_screen.dart';
 
 // ─── Design Tokens ────────────────────────────────────────────────────────────
@@ -11,7 +12,7 @@ const _kGrey = Color(0xFF8A8A9A);
 const _kLightGrey = Color(0xFFF5F5F8);
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Kreva-style minimalist home / discovery screen.
+/// Minimalist home / discovery screen connecting live backend vendors & categories.
 class BrowseServicesScreen extends StatefulWidget {
   const BrowseServicesScreen({super.key});
 
@@ -20,20 +21,45 @@ class BrowseServicesScreen extends StatefulWidget {
 }
 
 class _BrowseServicesScreenState extends State<BrowseServicesScreen> {
-  late List<Vendor> _vendors;
+  final ApiService _apiService = ApiService();
+
+  List<Vendor> _vendors = [];
+  bool _isLoading = true;
+  String? _selectedCategory;
 
   @override
   void initState() {
     super.initState();
-    _vendors = List.from(dummyVendors);
+    _loadVendors();
+  }
+
+  Future<void> _loadVendors({String? category}) async {
+    setState(() {
+      _isLoading = true;
+      _selectedCategory = category;
+    });
+
+    try {
+      final liveVendors = await _apiService.fetchVendors(category: category);
+      if (!mounted) return;
+      setState(() {
+        _vendors = liveVendors.isNotEmpty ? liveVendors : List.from(dummyVendors);
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _vendors = List.from(dummyVendors);
+        _isLoading = false;
+      });
+    }
   }
 
   void _toggleFav(String id) {
     setState(() {
       final i = _vendors.indexWhere((v) => v.id == id);
       if (i != -1) {
-        _vendors[i] =
-            _vendors[i].copyWith(isFavorite: !_vendors[i].isFavorite);
+        _vendors[i] = _vendors[i].copyWith(isFavorite: !_vendors[i].isFavorite);
       }
     });
   }
@@ -74,9 +100,14 @@ class _BrowseServicesScreenState extends State<BrowseServicesScreen> {
             ),
 
             // ── Category Grid ─────────────────────────────────────────
-            const SliverToBoxAdapter(child: _CategoryGrid()),
+            SliverToBoxAdapter(
+              child: _CategoryGrid(
+                selectedCategory: _selectedCategory,
+                onCategorySelected: (cat) => _loadVendors(category: cat),
+              ),
+            ),
 
-            // ── Recent Events header ───────────────────────────────────
+            // ── Category / Vendors Section Header ──────────────────────
             SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(22, 28, 22, 16),
@@ -84,52 +115,75 @@ class _BrowseServicesScreenState extends State<BrowseServicesScreen> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     Text(
-                      'Recent Events',
+                      _selectedCategory != null ? '$_selectedCategory Vendors' : 'Featured Vendors',
                       style: GoogleFonts.poppins(
                         fontSize: 17,
                         fontWeight: FontWeight.w700,
                         color: _kDark,
                       ),
                     ),
-                    GestureDetector(
-                      onTap: () {},
-                      child: Text(
-                        'View All',
-                        style: GoogleFonts.poppins(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                          color: _kAccent,
+                    if (_selectedCategory != null)
+                      GestureDetector(
+                        onTap: () => _loadVendors(),
+                        child: Text(
+                          'Show All',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: _kAccent,
+                          ),
+                        ),
+                      )
+                    else
+                      GestureDetector(
+                        onTap: () => _loadVendors(),
+                        child: Text(
+                          'Refresh',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                            color: _kAccent,
+                          ),
                         ),
                       ),
-                    ),
                   ],
                 ),
               ),
             ),
 
-            // ── Event Cards list ───────────────────────────────────────
-            SliverPadding(
-              padding: const EdgeInsets.symmetric(horizontal: 22),
-              sliver: SliverList(
-                delegate: SliverChildBuilderDelegate(
-                  (context, index) {
-                    final vendor = _vendors[index];
-                    return _EventCard(
-                      vendor: vendor,
-                      onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => VendorDetailsScreen(
-                            vendor: vendor,
-                            onFavoriteToggled: () => _toggleFav(vendor.id),
+            // ── Vendor Cards List ─────────────────────────────────────
+            if (_isLoading)
+              const SliverToBoxAdapter(
+                child: Padding(
+                  padding: EdgeInsets.all(40),
+                  child: Center(
+                    child: CircularProgressIndicator(strokeWidth: 2, color: _kAccent),
+                  ),
+                ),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.symmetric(horizontal: 22),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final vendor = _vendors[index];
+                      return _EventCard(
+                        vendor: vendor,
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => VendorDetailsScreen(
+                              vendor: vendor,
+                              onFavoriteToggled: () => _toggleFav(vendor.id),
+                            ),
                           ),
                         ),
-                      ),
-                    );
-                  },
-                  childCount: _vendors.length,
+                      );
+                    },
+                    childCount: _vendors.length,
+                  ),
                 ),
               ),
-            ),
 
             const SliverToBoxAdapter(child: SizedBox(height: 100)),
           ],
@@ -148,15 +202,10 @@ class _TopBar extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
       child: Row(
         children: [
-          // Four-dot menu icon
           _DotsIcon(),
           const Spacer(),
-
-          // Location dropdown
           _LocationPill(),
           const Spacer(),
-
-          // Notification bell
           _NotificationBell(),
         ],
       ),
@@ -164,7 +213,6 @@ class _TopBar extends StatelessWidget {
   }
 }
 
-/// 2×2 grid of small dots (menu icon).
 class _DotsIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -193,7 +241,6 @@ class _DotsIcon extends StatelessWidget {
   }
 }
 
-/// Tappable location chip.
 class _LocationPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -205,7 +252,7 @@ class _LocationPill extends StatelessWidget {
           const Icon(Icons.location_on_rounded, color: _kAccent, size: 16),
           const SizedBox(width: 4),
           Text(
-            'Kandy, LK',
+            'Sri Lanka',
             style: GoogleFonts.poppins(
               fontSize: 13,
               fontWeight: FontWeight.w600,
@@ -213,15 +260,13 @@ class _LocationPill extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 3),
-          const Icon(Icons.keyboard_arrow_down_rounded,
-              color: _kGrey, size: 18),
+          const Icon(Icons.keyboard_arrow_down_rounded, color: _kGrey, size: 18),
         ],
       ),
     );
   }
 }
 
-/// Bell with a small pink dot indicator.
 class _NotificationBell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -230,7 +275,7 @@ class _NotificationBell extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          Icon(Icons.notifications_none_rounded, color: _kDark, size: 26),
+          const Icon(Icons.notifications_none_rounded, color: _kDark, size: 26),
           Positioned(
             top: -2,
             right: -2,
@@ -252,17 +297,23 @@ class _NotificationBell extends StatelessWidget {
 // ─── Category Grid ─────────────────────────────────────────────────────────────
 
 class _CategoryGrid extends StatelessWidget {
-  const _CategoryGrid();
+  final String? selectedCategory;
+  final ValueChanged<String?> onCategorySelected;
+
+  const _CategoryGrid({
+    this.selectedCategory,
+    required this.onCategorySelected,
+  });
 
   static const _categories = [
-    _CatItem(Icons.person_outline_rounded, 'Vendor'),
-    _CatItem(Icons.location_city_outlined, 'Venue'),
-    _CatItem(Icons.checkroom_outlined, 'Dress'),
-    _CatItem(Icons.cake_outlined, 'Cake'),
-    _CatItem(Icons.face_retouching_natural, 'Make up'),
-    _CatItem(Icons.music_note_outlined, 'Music'),
-    _CatItem(Icons.camera_alt_outlined, 'Photo'),
-    _CatItem(Icons.restaurant_outlined, 'Food'),
+    _CatItem(Icons.person_outline_rounded, 'Vendor', null),
+    _CatItem(Icons.location_city_outlined, 'Venue', 'Hotels'),
+    _CatItem(Icons.checkroom_outlined, 'Dress', 'Bridal Wear'),
+    _CatItem(Icons.cake_outlined, 'Cake', 'Catering'),
+    _CatItem(Icons.face_retouching_natural, 'Make up', 'Beauty'),
+    _CatItem(Icons.music_note_outlined, 'Music', 'Music'),
+    _CatItem(Icons.camera_alt_outlined, 'Photo', 'Photography'),
+    _CatItem(Icons.restaurant_outlined, 'Food', 'Catering'),
   ];
 
   @override
@@ -279,7 +330,17 @@ class _CategoryGrid extends StatelessWidget {
           childAspectRatio: 0.95,
         ),
         itemCount: _categories.length,
-        itemBuilder: (_, i) => _CategoryCell(item: _categories[i]),
+        itemBuilder: (_, i) {
+          final item = _categories[i];
+          final isSelected = selectedCategory == item.filterKey ||
+              (item.filterKey == null && selectedCategory == null);
+
+          return _CategoryCell(
+            item: item,
+            isSelected: isSelected,
+            onTap: () => onCategorySelected(isSelected ? null : item.filterKey),
+          );
+        },
       ),
     );
   }
@@ -288,40 +349,50 @@ class _CategoryGrid extends StatelessWidget {
 class _CatItem {
   final IconData icon;
   final String label;
-  const _CatItem(this.icon, this.label);
+  final String? filterKey;
+  const _CatItem(this.icon, this.label, this.filterKey);
 }
 
 class _CategoryCell extends StatelessWidget {
   final _CatItem item;
-  const _CategoryCell({required this.item});
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  const _CategoryCell({
+    required this.item,
+    required this.isSelected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {},
+      onTap: onTap,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
             width: 56,
             height: 56,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: isSelected ? _kAccent : Colors.white,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: const Color(0xFFEDEDF2),
+                color: isSelected ? _kAccent : const Color(0xFFEDEDF2),
                 width: 1.5,
               ),
               boxShadow: [
                 BoxShadow(
-                  // ignore: deprecated_member_use
-                  color: Colors.black.withOpacity(0.04),
+                  color: isSelected
+                      ? _kAccent.withValues(alpha: 0.3)
+                      : Colors.black.withValues(alpha: 0.04),
                   blurRadius: 10,
                   offset: const Offset(0, 3),
                 ),
               ],
             ),
-            child: Icon(item.icon, color: _kAccent, size: 24),
+            child: Icon(item.icon, color: isSelected ? Colors.white : _kAccent, size: 24),
           ),
           const SizedBox(height: 7),
           Text(
@@ -329,8 +400,8 @@ class _CategoryCell extends StatelessWidget {
             textAlign: TextAlign.center,
             style: GoogleFonts.poppins(
               fontSize: 11,
-              fontWeight: FontWeight.w500,
-              color: _kGrey,
+              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+              color: isSelected ? _kAccent : _kGrey,
             ),
           ),
         ],
@@ -349,9 +420,6 @@ class _EventCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Build a presentable "event date" from the vendor data.
-    final dateLine = '${_fakeDate(vendor.id)} · ${vendor.location.split(',').first}';
-
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -362,8 +430,7 @@ class _EventCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(18),
           boxShadow: [
             BoxShadow(
-              // ignore: deprecated_member_use
-              color: Colors.black.withOpacity(0.05),
+              color: Colors.black.withValues(alpha: 0.05),
               blurRadius: 20,
               spreadRadius: 0,
               offset: const Offset(0, 4),
@@ -373,7 +440,7 @@ class _EventCard extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Thumbnail ──────────────────────────────────────────
+            // Thumbnail
             ClipRRect(
               borderRadius: BorderRadius.circular(14),
               child: SizedBox(
@@ -382,25 +449,10 @@ class _EventCard extends StatelessWidget {
                 child: Image.network(
                   vendor.imageUrl,
                   fit: BoxFit.cover,
-                  loadingBuilder: (_, child, progress) => progress == null
-                      ? child
-                      : Container(
-                          color: _kLightGrey,
-                          child: const Center(
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: _kAccent,
-                              ),
-                            ),
-                          ),
-                        ),
-                  errorBuilder: (_, __, ___) => Container(
+                  errorBuilder: (context, error, stackTrace) => Container(
                     color: _kLightGrey,
                     child: const Icon(Icons.image_not_supported_outlined,
-                        color: const Color(0xFFCCCCCC), size: 30),
+                        color: Color(0xFFCCCCCC), size: 30),
                   ),
                 ),
               ),
@@ -408,30 +460,36 @@ class _EventCard extends StatelessWidget {
 
             const SizedBox(width: 14),
 
-            // ── Text column ────────────────────────────────────────
+            // Text column
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Vendor name
-                  Text(
-                    vendor.name,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: _kDark,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          vendor.name,
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w700,
+                            color: _kDark,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      if (vendor.isFeatured)
+                        const Icon(Icons.verified_rounded, size: 16, color: _kAccent),
+                    ],
                   ),
                   const SizedBox(height: 3),
 
-                  // Date / location line
                   Text(
-                    dateLine,
+                    '${vendor.category} · ${vendor.location}',
                     style: GoogleFonts.poppins(
                       fontSize: 11,
-                      fontWeight: FontWeight.w400,
+                      fontWeight: FontWeight.w500,
                       color: _kGrey,
                     ),
                     maxLines: 1,
@@ -439,9 +497,8 @@ class _EventCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
 
-                  // Description snippet
                   Text(
-                    vendor.description,
+                    vendor.description.isNotEmpty ? vendor.description : 'Quality wedding vendor service.',
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       color: const Color(0xFF9B9BAA),
@@ -452,14 +509,32 @@ class _EventCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 6),
 
-                  // Read More
-                  Text(
-                    'Read More',
-                    style: GoogleFonts.poppins(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _kAccent,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'View Details',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _kAccent,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          const Icon(Icons.star_rounded, size: 14, color: Color(0xFFF59E0B)),
+                          const SizedBox(width: 3),
+                          Text(
+                            vendor.rating.toStringAsFixed(1),
+                            style: GoogleFonts.poppins(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w600,
+                              color: _kDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -468,19 +543,5 @@ class _EventCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  /// Deterministic fake date for display, derived from the vendor id.
-  static String _fakeDate(String id) {
-    const dates = [
-      '05 Mar, 2024',
-      '24 Feb, 2024',
-      '14 Apr, 2024',
-      '20 Jan, 2024',
-      '10 May, 2024',
-      '30 Jun, 2024',
-    ];
-    final idx = int.tryParse(id.replaceAll(RegExp(r'[^0-9]'), '')) ?? 0;
-    return dates[(idx - 1).clamp(0, dates.length - 1)];
   }
 }

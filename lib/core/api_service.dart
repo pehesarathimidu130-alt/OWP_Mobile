@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'app_config.dart';
 import '../models/listing_model.dart';
+import '../models/public_vendor_profile.dart';
 import '../models/vendor_model.dart';
 
 /// Exception thrown on network failure, non-2xx status, or bad JSON.
@@ -294,6 +295,12 @@ class ApiService {
           .toList();
     }
     return [];
+  }
+
+  /// Fetches a customer-facing vendor profile from GET /api/vendors/{id}
+  Future<PublicVendorProfile> fetchVendorProfile(int vendorId) async {
+    final data = await get('/vendors/$vendorId');
+    return PublicVendorProfile.fromJson(data as Map<String, dynamic>);
   }
 
   /// Registers a new user via POST /api/auth/register (or /api/auth/customer/register)
