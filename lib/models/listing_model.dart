@@ -1,4 +1,5 @@
 import '../core/app_config.dart';
+import 'vendor.dart';
 
 /// Represents a business service listing added by a vendor.
 class Listing {
@@ -262,6 +263,26 @@ class VendorInfo {
       reviewCount: parsedReviewCount,
       yearsInBusiness: parsedYears,
       isApproved: json['isApproved'] != false,
+    );
+  }
+
+  /// Converts VendorInfo into a full Vendor object
+  Vendor toVendor() {
+    return Vendor(
+      id: vendorId > 0 ? vendorId.toString() : id,
+      name: name,
+      category: 'General',
+      categoryIcon: 'storefront',
+      priceFrom: 0.0,
+      rating: rating,
+      reviewCount: reviewCount,
+      imageUrl: coverImageUrl ?? logoUrl ?? 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&q=80',
+      coverImageUrl: coverImageUrl,
+      logoUrl: logoUrl,
+      location: location,
+      city: city,
+      description: '',
+      isFeatured: isApproved,
     );
   }
 }
