@@ -5,7 +5,6 @@ import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/register_screen.dart';
 import '../features/auth/screens/splash_screen.dart';
 
-import '../screens/explore/explore_screen.dart';
 import '../screens/main_navigation.dart';
 
 final GoRouter appRouter = GoRouter(
@@ -33,15 +32,23 @@ final GoRouter appRouter = GoRouter(
     ),
     GoRoute(
       path: '/home',
-      builder: (context, state) => const MainNavigation(),
+      builder: (context, state) => const MainNavigation(initialIndex: 0),
     ),
     GoRoute(
       path: '/explore',
-      builder: (context, state) => const ExploreScreen(),
+      builder: (context, state) => const MainNavigation(initialIndex: 0),
     ),
     GoRoute(
       path: '/favorites',
+      builder: (context, state) => const MainNavigation(initialIndex: 1),
+    ),
+    GoRoute(
+      path: '/inquiries',
       builder: (context, state) => const MainNavigation(initialIndex: 2),
+    ),
+    GoRoute(
+      path: '/profile',
+      builder: (context, state) => const MainNavigation(initialIndex: 3),
     ),
   ],
 );

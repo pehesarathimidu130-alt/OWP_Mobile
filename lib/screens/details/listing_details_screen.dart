@@ -5,7 +5,7 @@ import '../../core/auth_gate.dart';
 import '../../core/favorites_provider.dart';
 import '../../core/theme.dart';
 import '../../models/listing_model.dart';
-import '../placeholders/inquiries_screen.dart';
+import '../inquiries/send_inquiry_screen.dart';
 import 'vendor_details_screen.dart';
 import '../../features/venue/widgets/listing_category_details.dart';
 import '../../core/api_service.dart';
@@ -516,7 +516,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                       icon: Icons.chat_bubble_outline_rounded,
                       onSuccess: () => Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const InquiriesScreen(fromDetails: true),
+                          builder: (_) => SendInquiryScreen(listing: listing),
                         ),
                       ),
                     ),

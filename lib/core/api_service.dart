@@ -2,10 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
+import 'package:image_picker/image_picker.dart';
 import 'app_config.dart';
 import '../models/listing_model.dart';
 import '../models/public_vendor_profile.dart';
 import '../models/vendor_model.dart';
+import '../models/inquiry_model.dart';
 
 /// Exception thrown on network failure, non-2xx status, or bad JSON.
 class ApiException implements Exception {
@@ -330,6 +332,116 @@ class ApiService {
       }
       rethrow;
     }
+  }
+
+  /// Submits an inquiry with optional photo attachment via multipart/form-data.
+  Future<Map<String, dynamic>> submitInquiry({
+    int? vendorId,
+    int? serviceId,
+    DateTime? weddingDate,
+    int? guestCount,
+    double? budget,
+    required String message,
+    XFile? photoAttachment,
+  }) async {
+    final uri = _buildUri('/inquiries');
+    final request = http.MultipartRequest('POST', uri);
+
+    // Attach Bearer token if logged in
+    try {
+      final token = await _storage.read(key: AppConfig.kAuthToken);
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+    } catch (_) {}
+
+    request.headers['Accept'] = 'application/json';
+
+    // Add fields
+    if (vendorId != null && vendorId > 0) {
+      request.fields['vendorId'] = vendorId.toString();
+    }
+    if (serviceId != null && serviceId > 0) {
+      request.fields['serviceId'] = serviceId.toString();
+    }
+    if (weddingDate != null) {
+      request.fields['weddingDate'] = weddingDate.toIso8601String();
+    }
+    if (guestCount != null && guestCount > 0) {
+      request.fields['guestCount'] = guestCount.toString();
+    }
+    if (budget != null && budget > 0) {
+      request.fields['budget'] = budget.toString();
+    }
+    request.fields['message'] = message.trim();
+
+    // Attach photo if provided
+    if (photoAttachment != null) {
+      final bytes = await photoAttachment.readAsBytes();
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'photo',
+          bytes,
+          filename: photoAttachment.name.isNotEmpty
+              ? photoAttachment.name
+              : 'inquiry_attachment.jpg',
+        ),
+      );
+    }
+
+    try {
+      final streamedResponse = await _httpClient.send(request);
+      final response = await http.Response.fromStream(streamedResponse);
+      final result = _processResponse(response);
+      if (result is Map<String, dynamic>) {
+        return result;
+      }
+      return {'success': true};
+    } on SocketException catch (e) {
+      throw ApiException('Network unreachable at $baseUrl ($e)');
+    } on http.ClientException catch (e) {
+      throw ApiException('Connection failed: Cannot reach backend at $baseUrl (${e.message})');
+    }
+  }
+
+  /// Fetches all inquiries created by the authenticated customer
+  Future<List<Inquiry>> getMyInquiries() async {
+    final response = await get('/inquiries');
+    if (response is List) {
+      return response
+          .map((item) => Inquiry.fromJson(item as Map<String, dynamic>))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Updates an existing inquiry (only permitted when Status == 'Pending')
+  Future<void> updateInquiry({
+    required int inquiryId,
+    DateTime? weddingDate,
+    int? guestCount,
+    double? budget,
+    String? message,
+  }) async {
+    final payload = <String, dynamic>{};
+    if (weddingDate != null) {
+      payload['weddingDate'] = weddingDate.toIso8601String();
+    }
+    if (guestCount != null) {
+      payload['guestCount'] = guestCount;
+    }
+    if (budget != null) {
+      payload['budget'] = budget;
+    }
+    if (message != null) {
+      payload['message'] = message;
+    }
+    await put('/inquiries/$inquiryId', body: payload);
+  }
+
+  /// Deletes an inquiry
+  Future<void> deleteInquiry(int inquiryId) async {
+    await delete('/inquiries/$inquiryId');
   }
 
   // ─── Internal Response Processing ──────────────────────────────────────────

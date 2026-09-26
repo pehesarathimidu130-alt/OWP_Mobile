@@ -1,17 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../core/auth_gate.dart';
 import '../core/theme.dart';
 import 'explore/explore_screen.dart';
 import 'favorites/favorites_screen.dart';
-import 'home/home_screen.dart';
-import 'placeholders/inquiries_screen.dart';
+import 'inquiries/my_inquiries_screen.dart';
 import 'profile/profile_screen.dart';
 
-/// Root navigation shell with a 5-tab BottomNavigationBar.
-///
-/// • Public tabs: Home (0), Explore (1) – Always open to guests without login.
-/// • Protected tabs: Favourites (2), Inquiries (3), Profile (4) – Protected via action-based [requireLogin].
+/// Root navigation shell with a streamlined 4-tab BottomNavigationBar:
+/// 1. Explore (Default / Initial public tab)
+/// 2. Favourites
+/// 3. Inquiries
+/// 4. Profile
 class MainNavigation extends StatefulWidget {
   final int initialIndex;
   const MainNavigation({super.key, this.initialIndex = 0});
@@ -24,11 +23,6 @@ class _MainNavigationState extends State<MainNavigation> {
   late int _selectedIndex;
 
   static const List<_NavItem> _navItems = [
-    _NavItem(
-      label: 'Home',
-      icon: Icons.home_outlined,
-      activeIcon: Icons.home_rounded,
-    ),
     _NavItem(
       label: 'Explore',
       icon: Icons.explore_outlined,
@@ -52,10 +46,9 @@ class _MainNavigationState extends State<MainNavigation> {
   ];
 
   List<Widget> _buildScreens() => [
-        HomeScreen(onExploreTap: () => setState(() => _selectedIndex = 1)),
         const ExploreScreen(),
-        FavoritesScreen(onExploreTap: () => setState(() => _selectedIndex = 1)),
-        const InquiriesScreen(),
+        FavoritesScreen(onExploreTap: () => setState(() => _selectedIndex = 0)),
+        MyInquiriesScreen(onExploreTap: () => setState(() => _selectedIndex = 0)),
         const ProfileScreen(),
       ];
 
@@ -66,50 +59,7 @@ class _MainNavigationState extends State<MainNavigation> {
   }
 
   void _onItemTapped(int index) {
-    // Public tabs: index 0 (Home) and index 1 (Explore)
-    if (index == 0 || index == 1) {
-      setState(() => _selectedIndex = index);
-      return;
-    }
-
-    // Protected tab: Favourites
-    if (index == 2) {
-      requireLogin(
-        context,
-        reason: 'Sign in to save and manage your favourite wedding vendors',
-        icon: Icons.favorite_border_rounded,
-        onSuccess: () {
-          setState(() => _selectedIndex = 2);
-        },
-      );
-      return;
-    }
-
-    // Protected tab: Inquiries
-    if (index == 3) {
-      requireLogin(
-        context,
-        reason: 'Sign in to send inquiries and chat directly with vendors',
-        icon: Icons.chat_bubble_outline_rounded,
-        onSuccess: () {
-          setState(() => _selectedIndex = 3);
-        },
-      );
-      return;
-    }
-
-    // Protected tab: Profile
-    if (index == 4) {
-      requireLogin(
-        context,
-        reason: 'Sign in to view your profile and wedding planning dashboard',
-        icon: Icons.person_outline_rounded,
-        onSuccess: () {
-          setState(() => _selectedIndex = 4);
-        },
-      );
-      return;
-    }
+    setState(() => _selectedIndex = index);
   }
 
   @override
@@ -138,18 +88,24 @@ class _MainNavigationState extends State<MainNavigation> {
           selectedItemColor: OleenaTheme.primary,
           unselectedItemColor: OleenaTheme.textMuted,
           selectedLabelStyle: GoogleFonts.poppins(
-            fontWeight: FontWeight.w600,
             fontSize: 11,
+            fontWeight: FontWeight.w600,
           ),
           unselectedLabelStyle: GoogleFonts.poppins(
-            fontWeight: FontWeight.w500,
             fontSize: 11,
+            fontWeight: FontWeight.w500,
           ),
           items: _navItems
               .map(
                 (item) => BottomNavigationBarItem(
-                  icon: Icon(item.icon),
-                  activeIcon: Icon(item.activeIcon),
+                  icon: Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Icon(item.icon),
+                  ),
+                  activeIcon: Padding(
+                    padding: const EdgeInsets.only(bottom: 2),
+                    child: Icon(item.activeIcon),
+                  ),
                   label: item.label,
                 ),
               )
