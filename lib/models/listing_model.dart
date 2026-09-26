@@ -17,6 +17,12 @@ class Listing {
   final String coverImageUrl;
   final List<String> images;
   final VendorInfo vendor;
+  final Map<String, dynamic>? hotelVenueDetails;
+  final Map<String, dynamic>? photographyDetails;
+  final Map<String, dynamic>? musicDetails;
+  final Map<String, dynamic>? decorationsDetails;
+  final Map<String, dynamic>? cateringDetails;
+  final List<Map<String, dynamic>>? venueSpaces;
   bool isFavorite;
 
   Listing({
@@ -34,6 +40,12 @@ class Listing {
     required this.coverImageUrl,
     required this.images,
     required this.vendor,
+    this.hotelVenueDetails,
+    this.photographyDetails,
+    this.musicDetails,
+    this.decorationsDetails,
+    this.cateringDetails,
+    this.venueSpaces,
     this.isFavorite = false,
   });
 
@@ -124,6 +136,12 @@ class Listing {
             'location': json['location'] ?? 'Sri Lanka',
           };
 
+    final rawVenueSpaces = json['venueSpaces'] as List<dynamic>?;
+    List<Map<String, dynamic>>? parsedVenueSpaces;
+    if (rawVenueSpaces != null) {
+      parsedVenueSpaces = rawVenueSpaces.map((e) => e as Map<String, dynamic>).toList();
+    }
+
     return Listing(
       id: rawId.toString(),
       serviceId: serviceIdVal,
@@ -139,6 +157,12 @@ class Listing {
       coverImageUrl: resolvedCover,
       images: parsedImages,
       vendor: VendorInfo.fromJson(rawVendor),
+      hotelVenueDetails: json['hotelVenueDetails'] as Map<String, dynamic>?,
+      photographyDetails: json['photographyDetails'] as Map<String, dynamic>?,
+      musicDetails: json['musicDetails'] as Map<String, dynamic>?,
+      decorationsDetails: json['decorationsDetails'] as Map<String, dynamic>?,
+      cateringDetails: json['cateringDetails'] as Map<String, dynamic>?,
+      venueSpaces: parsedVenueSpaces,
       isFavorite: json['isFavorite'] == true,
     );
   }
@@ -158,6 +182,12 @@ class Listing {
     String? coverImageUrl,
     List<String>? images,
     VendorInfo? vendor,
+    Map<String, dynamic>? hotelVenueDetails,
+    Map<String, dynamic>? photographyDetails,
+    Map<String, dynamic>? musicDetails,
+    Map<String, dynamic>? decorationsDetails,
+    Map<String, dynamic>? cateringDetails,
+    List<Map<String, dynamic>>? venueSpaces,
     bool? isFavorite,
   }) {
     return Listing(
@@ -175,6 +205,12 @@ class Listing {
       coverImageUrl: coverImageUrl ?? this.coverImageUrl,
       images: images ?? this.images,
       vendor: vendor ?? this.vendor,
+      hotelVenueDetails: hotelVenueDetails ?? this.hotelVenueDetails,
+      photographyDetails: photographyDetails ?? this.photographyDetails,
+      musicDetails: musicDetails ?? this.musicDetails,
+      decorationsDetails: decorationsDetails ?? this.decorationsDetails,
+      cateringDetails: cateringDetails ?? this.cateringDetails,
+      venueSpaces: venueSpaces ?? this.venueSpaces,
       isFavorite: isFavorite ?? this.isFavorite,
     );
   }

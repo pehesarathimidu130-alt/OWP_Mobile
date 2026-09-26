@@ -7,6 +7,8 @@ import '../../core/theme.dart';
 import '../../models/listing_model.dart';
 import '../placeholders/inquiries_screen.dart';
 import 'vendor_details_screen.dart';
+import '../../features/venue/widgets/listing_category_details.dart';
+import '../../core/api_service.dart';
 
 /// Detailed view for a specific business service / package added by a vendor.
 class ListingDetailsScreen extends StatefulWidget {
@@ -28,11 +30,17 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
   late bool _isFavorite;
   late final AnimationController _heartCtrl;
   late final Animation<double> _heartScale;
+  
+  late Listing _listing;
+  bool _isLoadingDetails = true;
 
   @override
   void initState() {
     super.initState();
-    _isFavorite = widget.listing.isFavorite;
+    _listing = widget.listing;
+    _isFavorite = _listing.isFavorite;
+
+    _fetchDetails();
 
     _heartCtrl = AnimationController(
       vsync: this,
@@ -45,6 +53,24 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
       parent: _heartCtrl,
       curve: Curves.easeInOut,
     ));
+  }
+
+  Future<void> _fetchDetails() async {
+    try {
+      final detailedListing = await ApiService().fetchListingById(_listing.serviceId);
+      if (mounted) {
+        setState(() {
+          _listing = detailedListing;
+          _isLoadingDetails = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoadingDetails = false;
+        });
+      }
+    }
   }
 
   @override
@@ -79,7 +105,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final listing = widget.listing;
+    final listing = _listing;
     final vendor = listing.vendor;
     final screenH = MediaQuery.of(context).size.height;
     final imageH = screenH * 0.38;
@@ -375,6 +401,18 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                         ),
                       ),
                       const SizedBox(height: 24),
+
+                      // ── Specifications & Details ─────────────────
+                      if (_isLoadingDetails)
+                        const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: Center(
+                            child: CircularProgressIndicator(color: OleenaTheme.primary),
+                          ),
+                        )
+                      else
+                        ListingCategoryDetailsWidget(listing: listing),
+                      const SizedBox(height: 12),
 
                       // ── Service Highlights ─────────────────────────
                       Text(
