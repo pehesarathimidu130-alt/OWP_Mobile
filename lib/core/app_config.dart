@@ -16,7 +16,7 @@ class AppConfig {
   /// Overridable at run time via `--dart-define=DEV_IP=<ip>`.
   static const String devHostIp = String.fromEnvironment(
     'DEV_IP',
-    defaultValue: '192.168.8.190',
+    defaultValue: '10.36.249.167',
   );
 
   /// Backend port (ASP.NET Core Web API).

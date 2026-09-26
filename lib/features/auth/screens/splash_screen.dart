@@ -57,7 +57,9 @@ class _SplashScreenState extends State<SplashScreen>
       final prefs = await SharedPreferences.getInstance();
       hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;
       // Silently restore cached session in background so profile data is ready
-      context.read<AuthProvider>().checkAuthStatus();
+      if (mounted) {
+        context.read<AuthProvider>().checkAuthStatus();
+      }
     } catch (_) {
       hasSeenOnboarding = false;
     }

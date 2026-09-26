@@ -5,7 +5,7 @@ import '../../core/auth_gate.dart';
 import '../../core/theme.dart';
 import '../../models/public_vendor_profile.dart';
 import '../../models/vendor.dart';
-import '../placeholders/inquiries_screen.dart';
+import '../inquiries/send_inquiry_screen.dart';
 
 /// Full dynamic Vendor Details Screen for Mobile Customers.
 /// Displays live vendor business profile details, business hours (open/closed),
@@ -478,7 +478,10 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
                       icon: Icons.chat_bubble_outline_rounded,
                       onSuccess: () => Navigator.of(context).push(
                         MaterialPageRoute(
-                          builder: (_) => const InquiriesScreen(fromDetails: true),
+                          builder: (_) => SendInquiryScreen(
+                            vendor: vendor,
+                            vendorId: int.tryParse(vendor.id),
+                          ),
                         ),
                       ),
                     ),
