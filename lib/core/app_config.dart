@@ -1,38 +1,68 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/foundation.dart'
-    show kIsWeb, kReleaseMode, TargetPlatform, defaultTargetPlatform;
+    show debugPrint, defaultTargetPlatform, kIsWeb, kReleaseMode, TargetPlatform;
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Global API configuration for the OWP shared backend.
 ///
 /// Routing strategy:
-///   • Web (Chrome dev)     → http://localhost:5131/api
-///   • Android Physical     → http://192.168.1.6:5131/api (Host LAN IP)
-///   • Android Emulator     → http://10.0.2.2:5131/api (when --dart-define=USE_EMULATOR=true)
-///   • Android USB Reverse  → http://127.0.0.1:5131/api (when --dart-define=USE_ADB_REVERSE=true)
-///   • Production (Release) → [productionBaseUrl]
+///   • Web (Chrome dev)      → http://localhost:5131/api
+///   • Android / iOS Device  → Auto-detects PC host IP over Wi-Fi / ADB reverse / SharedPreferences
+///   • Android Emulator      → http://10.0.2.2:5131/api
+///   • Production (Release)  → [productionBaseUrl]
 class AppConfig {
   AppConfig._();
 
-  /// Host machine IPv4 address for physical Android device testing over Wi-Fi.
-  /// Overridable at run time via `--dart-define=DEV_IP=<ip>`.
-  static const String devHostIp = String.fromEnvironment(
-    'DEV_IP',
-    defaultValue: '10.36.249.167',
-  );
+  static const String _defaultDevIp = '192.168.1.2';
+  static const String _productionBaseUrl = 'https://api.oleena.lk';
+
+  // ── SharedPreferences & Storage Keys ─────────────────────────────────────────
+  static const String kHasSeenOnboarding = 'hasSeenOnboarding';
+  static const String kAuthToken = 'auth_token';
+  static const String kCachedDevIp = 'cached_dev_host_ip';
+
+  // ── Runtime Resolved State ──────────────────────────────────────────────────
+  static String? _resolvedHost;
+  static bool _isInitializing = false;
 
   /// Backend port (ASP.NET Core Web API).
   /// Overridable at run time via `--dart-define=PORT=<port>`.
-  static const String backendPort = String.fromEnvironment(
-    'PORT',
-    defaultValue: '5131',
-  );
+  static String get backendPort {
+    const fromEnv = String.fromEnvironment('PORT');
+    if (fromEnv.isNotEmpty) return fromEnv;
+    return '5131';
+  }
 
-  /// The live / staging backend URL (used in release builds).
-  static const String _productionBaseUrl = 'https://api.oleena.lk';
+  /// Host machine IPv4 address for physical mobile device testing.
+  /// Overridable at run time via `--dart-define=DEV_IP=<ip>`.
+  static String get devHostIp {
+    if (_resolvedHost != null && _resolvedHost!.isNotEmpty) {
+      return _resolvedHost!;
+    }
+    const fromEnv = String.fromEnvironment('DEV_IP');
+    if (fromEnv.isNotEmpty) return fromEnv;
+    return _defaultDevIp;
+  }
+
+  /// Sets the host IP manually (e.g. from developer settings UI) and saves it.
+  static Future<void> setHostIp(String ip) async {
+    final cleanIp = ip.trim();
+    if (cleanIp.isNotEmpty) {
+      _resolvedHost = cleanIp;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString(kCachedDevIp, cleanIp);
+      } catch (_) {}
+    }
+  }
+
+  /// Returns the currently active development host IP or host name.
+  static String get currentHost => _resolvedHost ?? devHostIp;
 
   /// Returns the correct base URL for the current run environment.
   static String get baseUrl {
     if (kIsWeb) {
-      // Running on Chrome / Web – the .NET API is on the same machine.
       return 'http://localhost:$backendPort/api';
     }
 
@@ -40,34 +70,255 @@ class AppConfig {
       return '$_productionBaseUrl/api';
     }
 
-    if (defaultTargetPlatform == TargetPlatform.android) {
-      // If running specifically on the Android Emulator, allow loopback alias
-      const bool useEmulator = bool.fromEnvironment(
-        'USE_EMULATOR',
-        defaultValue: false,
-      );
-      if (useEmulator) {
-        return 'http://10.0.2.2:$backendPort/api';
-      }
-
-      // If using `adb reverse tcp:5131 tcp:5131` over USB cable
-      const bool useAdbReverse = bool.fromEnvironment(
-        'USE_ADB_REVERSE',
-        defaultValue: false,
-      );
-      if (useAdbReverse) {
-        return 'http://127.0.0.1:$backendPort/api';
-      }
-
-      // Physical Android phone connected to host machine on the same Wi-Fi LAN
-      return 'http://$devHostIp:$backendPort/api';
+    // 1. If host was resolved by initialization, auto-discovery, or user override
+    if (_resolvedHost != null && _resolvedHost!.isNotEmpty) {
+      return 'http://$_resolvedHost:$backendPort/api';
     }
 
-    // iOS Simulator or desktop device in debug mode
+    // 2. Explicit compile-time environment flags
+    const fromEnv = String.fromEnvironment('DEV_IP');
+    if (fromEnv.isNotEmpty) {
+      return 'http://$fromEnv:$backendPort/api';
+    }
+
+    const bool useEmulator = bool.fromEnvironment(
+      'USE_EMULATOR',
+      defaultValue: false,
+    );
+    if (useEmulator) {
+      return 'http://10.0.2.2:$backendPort/api';
+    }
+
+    const bool useAdbReverse = bool.fromEnvironment(
+      'USE_ADB_REVERSE',
+      defaultValue: false,
+    );
+    if (useAdbReverse) {
+      return 'http://127.0.0.1:$backendPort/api';
+    }
+
+    // 3. Fallback to default host IP
     return 'http://$devHostIp:$backendPort/api';
   }
 
-  // ── Shared-preferences & storage keys ──────────────────────────────────────
-  static const String kHasSeenOnboarding = 'hasSeenOnboarding';
-  static const String kAuthToken = 'auth_token';
+  /// Initializes host configuration asynchronously.
+  ///
+  /// Priority:
+  ///   1. Build-time `DEV_IP`
+  ///   2. ADB Reverse loopback (127.0.0.1) if responsive
+  ///   3. Android Emulator (10.0.2.2) if responsive
+  ///   4. Cached IP in SharedPreferences if responsive
+  ///   5. Quick probe of default IP
+  ///   6. Wi-Fi Subnet Auto-Discovery (scans LAN for backend port 5131)
+  static Future<void> initialize() async {
+    if (kIsWeb || kReleaseMode || _isInitializing) return;
+    _isInitializing = true;
+
+    try {
+      final port = int.tryParse(backendPort) ?? 5131;
+
+      // 1. Check explicit compile-time flag
+      const fromEnv = String.fromEnvironment('DEV_IP');
+      if (fromEnv.isNotEmpty) {
+        _resolvedHost = fromEnv;
+        debugPrint('[AppConfig] Using build-time DEV_IP: $fromEnv');
+        return;
+      }
+
+      // 2. Check if ADB reverse (127.0.0.1) is active and reachable
+      if (await _canConnect('127.0.0.1', port, timeoutMs: 200)) {
+        _resolvedHost = '127.0.0.1';
+        debugPrint('[AppConfig] Connected via ADB reverse (127.0.0.1:$port)');
+        return;
+      }
+
+      // 3. Check if Android emulator loopback (10.0.2.2) is reachable
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        if (await _canConnect('10.0.2.2', port, timeoutMs: 200)) {
+          _resolvedHost = '10.0.2.2';
+          debugPrint('[AppConfig] Connected via Android Emulator (10.0.2.2:$port)');
+          return;
+        }
+      }
+
+      // 4. Check cached IP from SharedPreferences
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final cached = prefs.getString(kCachedDevIp);
+        if (cached != null && cached.isNotEmpty) {
+          if (await _canConnect(cached, port, timeoutMs: 300)) {
+            _resolvedHost = cached;
+            debugPrint('[AppConfig] Connected via cached IP: $cached:$port');
+            return;
+          }
+        }
+      } catch (_) {}
+
+      // 5. Quick probe default IP
+      if (await _canConnect(_defaultDevIp, port, timeoutMs: 300)) {
+        _resolvedHost = _defaultDevIp;
+        debugPrint('[AppConfig] Connected via default LAN IP: $_defaultDevIp:$port');
+        return;
+      }
+
+      // 6. Subnet auto-discovery
+      final discovered = await autoDiscoverHost(timeoutMs: 400);
+      if (discovered != null) {
+        _resolvedHost = discovered;
+        debugPrint('[AppConfig] Auto-discovered backend at: $discovered:$port');
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          await prefs.setString(kCachedDevIp, discovered);
+        } catch (_) {}
+      }
+    } catch (e) {
+      debugPrint('[AppConfig] Initialization warning: $e');
+    } finally {
+      _isInitializing = false;
+    }
+  }
+
+  /// Automatically discovers the backend host machine on the local Wi-Fi network
+  /// by probing candidate IPs in parallel on the backend port.
+  static Future<String?> autoDiscoverHost({int timeoutMs = 400}) async {
+    if (kIsWeb || kReleaseMode) return null;
+
+    try {
+      final port = int.tryParse(backendPort) ?? 5131;
+
+      // 1. Fast checks for loopback & emulator
+      if (await _canConnect('127.0.0.1', port, timeoutMs: 200)) return '127.0.0.1';
+      if (defaultTargetPlatform == TargetPlatform.android &&
+          await _canConnect('10.0.2.2', port, timeoutMs: 200)) {
+        return '10.0.2.2';
+      }
+
+      // 2. Discover local network interfaces on the mobile phone
+      final interfaces = await NetworkInterface.list(
+        type: InternetAddressType.IPv4,
+        includeLinkLocal: false,
+      );
+
+      final candidateIps = <String>{};
+
+      // Add common fallbacks
+      candidateIps.add(_defaultDevIp);
+
+      for (final iface in interfaces) {
+        for (final addr in iface.addresses) {
+          final ip = addr.address;
+          if (ip.startsWith('127.') || ip.startsWith('169.254.')) continue;
+          final parts = ip.split('.');
+          if (parts.length != 4) continue;
+          final prefix = '${parts[0]}.${parts[1]}.${parts[2]}.';
+          final myOctet = int.tryParse(parts[3]) ?? 0;
+
+          // Gateway and common developer host IPs first
+          candidateIps.add('${prefix}1');
+          candidateIps.add('${prefix}2');
+          candidateIps.add('${prefix}3');
+          candidateIps.add('${prefix}4');
+          candidateIps.add('${prefix}5');
+          candidateIps.add('${prefix}6');
+          candidateIps.add('${prefix}7');
+          candidateIps.add('${prefix}8');
+          candidateIps.add('${prefix}9');
+          candidateIps.add('${prefix}10');
+          candidateIps.add('${prefix}100');
+          candidateIps.add('${prefix}101');
+          candidateIps.add('${prefix}102');
+          candidateIps.add('${prefix}105');
+
+          // Nearby IPs around the mobile device's DHCP lease
+          for (int d = -5; d <= 5; d++) {
+            final targetOctet = myOctet + d;
+            if (targetOctet > 0 && targetOctet < 255) {
+              candidateIps.add('$prefix$targetOctet');
+            }
+          }
+
+          // Remaining subnet addresses (1..254)
+          for (int i = 1; i <= 254; i++) {
+            candidateIps.add('$prefix$i');
+          }
+        }
+      }
+
+      if (candidateIps.isEmpty) return null;
+
+      // Probe candidates in fast parallel batches
+      final candidateList = candidateIps.toList();
+
+      // Batch 1: High priority candidates (first 30)
+      final batch1 = candidateList.take(30).toList();
+      final win1 = await _probeBatch(batch1, port, timeoutMs: timeoutMs);
+      if (win1 != null) {
+        _resolvedHost = win1;
+        return win1;
+      }
+
+      // Batch 2: The rest of the subnet in chunks of 50
+      final rest = candidateList.skip(30).toList();
+      for (int i = 0; i < rest.length; i += 50) {
+        final end = (i + 50 > rest.length) ? rest.length : i + 50;
+        final chunk = rest.sublist(i, end);
+        final win = await _probeBatch(chunk, port, timeoutMs: timeoutMs);
+        if (win != null) {
+          _resolvedHost = win;
+          return win;
+        }
+      }
+    } catch (e) {
+      debugPrint('[AppConfig] Subnet scan failed: $e');
+    }
+    return null;
+  }
+
+  static Future<String?> _probeBatch(
+    List<String> ips,
+    int port, {
+    required int timeoutMs,
+  }) async {
+    if (ips.isEmpty) return null;
+    final completer = Completer<String?>();
+    int pending = ips.length;
+
+    for (final ip in ips) {
+      _canConnect(ip, port, timeoutMs: timeoutMs).then((ok) {
+        if (ok && !completer.isCompleted) {
+          completer.complete(ip);
+        } else {
+          pending--;
+          if (pending == 0 && !completer.isCompleted) {
+            completer.complete(null);
+          }
+        }
+      }).catchError((_) {
+        pending--;
+        if (pending == 0 && !completer.isCompleted) {
+          completer.complete(null);
+        }
+      });
+    }
+
+    return completer.future;
+  }
+
+  static Future<bool> _canConnect(
+    String host,
+    int port, {
+    required int timeoutMs,
+  }) async {
+    try {
+      final socket = await Socket.connect(
+        host,
+        port,
+        timeout: Duration(milliseconds: timeoutMs),
+      );
+      socket.destroy();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 }

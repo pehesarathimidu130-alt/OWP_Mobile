@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'core/app_config.dart';
 import 'core/app_router.dart';
 import 'core/auth_provider.dart';
 import 'core/favorites_provider.dart';
@@ -8,12 +9,23 @@ import 'core/theme.dart';
 import 'features/profile/providers/customer_profile_provider.dart';
 import 'features/profile/providers/notification_preferences_provider.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
+
+  // Asynchronously discover host IP or connect via ADB reverse / cached IP
+  try {
+    await AppConfig.initialize().timeout(
+      const Duration(milliseconds: 1500),
+      onTimeout: () => debugPrint('[AppConfig] Init timed out; using defaults'),
+    );
+  } catch (e) {
+    debugPrint('[AppConfig] Init error: $e');
+  }
+
   runApp(const OleenaApp());
 }
 
