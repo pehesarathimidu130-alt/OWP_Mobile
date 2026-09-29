@@ -93,16 +93,6 @@ class _AiChatViewState extends State<_AiChatView> {
               color: OleenaTheme.textDark,
             ),
           ),
-          actions: [
-            IconButton(
-              tooltip: 'New chat',
-              icon: const Icon(
-                Icons.add_comment_outlined,
-                color: OleenaTheme.textDark,
-              ),
-              onPressed: () => context.read<ChatProvider>().clearChat(),
-            ),
-          ],
           bottom: PreferredSize(
             preferredSize: const Size.fromHeight(1),
             child: Divider(

@@ -30,7 +30,7 @@ class ChatGreeting extends StatefulWidget {
 }
 
 class _ChatGreetingState extends State<ChatGreeting> {
-  static const List<String> _prompts = [
+  static const List<String> _alternatePrompts = [
     'How can I help plan your wedding today?',
     "Let's plan it together.",
     'What about your wedding?',
@@ -38,37 +38,45 @@ class _ChatGreetingState extends State<ChatGreeting> {
     "Let's organise your special day.",
   ];
 
-  late final String _subtitlePrompt;
+  late final int _promptIndex;
 
   @override
   void initState() {
     super.initState();
     final random = math.Random();
-    _subtitlePrompt = _prompts[random.nextInt(_prompts.length)];
+    // Index 0 means we use the dynamic "Good afternoon, Name" greeting.
+    // Indices 1..N correspond to _alternatePrompts.
+    _promptIndex = random.nextInt(_alternatePrompts.length + 1);
   }
 
   @override
   Widget build(BuildContext context) {
-    final auth = context.watch<AuthProvider>();
-    final now = DateTime.now();
-    final period = greetingPeriod(now);
+    String headlineText;
 
-    // Extract first name: first word of fullName → first word of displayName.
-    String? firstName;
-    final full = auth.fullName?.trim();
-    if (full != null && full.isNotEmpty) {
-      firstName = full.split(RegExp(r'\s+')).first;
-    } else {
-      // displayName never throws — use it as fallback.
-      final dn = auth.displayName.trim();
-      if (dn != 'Oleena Member') {
-        firstName = dn.split(RegExp(r'\s+')).first;
+    if (_promptIndex == 0) {
+      // Dynamic time-based greeting.
+      final auth = context.watch<AuthProvider>();
+      final now = DateTime.now();
+      final period = greetingPeriod(now);
+
+      String? firstName;
+      final full = auth.fullName?.trim();
+      if (full != null && full.isNotEmpty) {
+        firstName = full.split(RegExp(r'\s+')).first;
+      } else {
+        final dn = auth.displayName.trim();
+        if (dn != 'Oleena Member') {
+          firstName = dn.split(RegExp(r'\s+')).first;
+        }
       }
-    }
 
-    final greetingText = firstName != null && firstName.isNotEmpty
-        ? 'Good $period, $firstName'
-        : 'Good $period';
+      headlineText = firstName != null && firstName.isNotEmpty
+          ? 'Good $period, $firstName'
+          : 'Good $period';
+    } else {
+      // One of the alternate fixed prompts.
+      headlineText = _alternatePrompts[_promptIndex - 1];
+    }
 
     return Center(
       child: Padding(
@@ -94,25 +102,12 @@ class _ChatGreetingState extends State<ChatGreeting> {
 
             // Playfair Display greeting headline.
             Text(
-              greetingText,
+              headlineText,
               style: GoogleFonts.playfairDisplay(
                 fontSize: 28,
                 fontWeight: FontWeight.w700,
                 color: OleenaTheme.textDark,
                 height: 1.2,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 10),
-
-            // Poppins subtitle.
-            Text(
-              _subtitlePrompt,
-              style: GoogleFonts.poppins(
-                fontSize: 14,
-                fontWeight: FontWeight.w400,
-                color: OleenaTheme.textMuted,
-                height: 1.5,
               ),
               textAlign: TextAlign.center,
             ),
