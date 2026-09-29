@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/api_service.dart';
+import '../../core/app_config.dart';
 import '../../core/auth_provider.dart';
 import '../../core/favorites_provider.dart';
 import '../../core/theme.dart';
@@ -58,6 +59,144 @@ class _ExploreScreenState extends State<ExploreScreen> {
     super.dispose();
   }
 
+  void _showServerConfigSheet() {
+    final ipController = TextEditingController(text: AppConfig.devHostIp);
+    bool isDetecting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheetState) => Padding(
+          padding: EdgeInsets.only(
+            left: 24,
+            right: 24,
+            top: 24,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Backend Server Settings',
+                    style: GoogleFonts.playfairDisplay(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: OleenaTheme.textDark,
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Current URL: ${AppConfig.baseUrl}',
+                style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
+              ),
+              const SizedBox(height: 16),
+              OutlinedButton.icon(
+                onPressed: isDetecting
+                    ? null
+                    : () async {
+                        setSheetState(() => isDetecting = true);
+                        final discovered = await AppConfig.autoDiscoverHost();
+                        setSheetState(() => isDetecting = false);
+                        if (discovered != null) {
+                          ipController.text = discovered;
+                          await AppConfig.setHostIp(discovered);
+                          if (ctx.mounted) {
+                            Navigator.pop(ctx);
+                          }
+                          if (mounted) {
+                            _fetchListings();
+                          }
+                        } else {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              const SnackBar(
+                                content: Text('Could not find backend on local Wi-Fi. Ensure PC backend is running!'),
+                              ),
+                            );
+                          }
+                        }
+                      },
+                icon: isDetecting
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.wifi_find_rounded, size: 18),
+                label: Text(isDetecting ? 'Scanning Wi-Fi...' : 'Auto-Detect PC IP (Wi-Fi)'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: OleenaTheme.primary,
+                  side: const BorderSide(color: OleenaTheme.primary),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(child: Divider(color: Colors.grey.shade300)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text('OR MANUALLY ENTER IP',
+                        style: GoogleFonts.poppins(fontSize: 10, color: Colors.grey.shade500, fontWeight: FontWeight.w600)),
+                  ),
+                  Expanded(child: Divider(color: Colors.grey.shade300)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: ipController,
+                keyboardType: TextInputType.text,
+                decoration: InputDecoration(
+                  labelText: 'Host IPv4 Address',
+                  hintText: 'e.g. 192.168.1.2 or 127.0.0.1',
+                  prefixIcon: const Icon(Icons.lan_outlined),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              ),
+              const SizedBox(height: 16),
+              ElevatedButton(
+                onPressed: () async {
+                  final newIp = ipController.text.trim();
+                  if (newIp.isNotEmpty) {
+                    await AppConfig.setHostIp(newIp);
+                    if (ctx.mounted) {
+                      Navigator.pop(ctx);
+                    }
+                    if (mounted) {
+                      _fetchListings();
+                    }
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: OleenaTheme.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Save & Reconnect'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   /// Sends a GET request to /api/listings
   Future<void> _fetchListings() async {
     setState(() {
@@ -106,6 +245,10 @@ class _ExploreScreenState extends State<ExploreScreen> {
           item.vendor.location.toLowerCase().contains(query);
 
       final matchesCategory = _selectedCategory == 'All' ||
+          item.category
+              .split(',')
+              .map((c) => c.trim().toLowerCase())
+              .contains(_selectedCategory.toLowerCase()) ||
           item.category.toLowerCase().contains(_selectedCategory.toLowerCase());
 
       final matchesRating = _filterCriteria.minRating <= 0.0 ||
@@ -494,6 +637,19 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton.icon(
+                onPressed: _showServerConfigSheet,
+                icon: const Icon(Icons.dns_rounded, size: 16),
+                label: Text(
+                  'Server: ${AppConfig.devHostIp}:${AppConfig.backendPort}',
+                  style: GoogleFonts.poppins(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    decoration: TextDecoration.underline,
                   ),
                 ),
               ),

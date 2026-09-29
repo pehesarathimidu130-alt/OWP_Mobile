@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -129,8 +130,10 @@ class ApiService {
     final headers = await _getHeaders();
 
     try {
-      final response = await _httpClient.get(uri, headers: headers);
+      final response = await _httpClient.get(uri, headers: headers).timeout(const Duration(seconds: 15));
       return _processResponse(response);
+    } on TimeoutException {
+      throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
       throw ApiException('Network unreachable: Please ensure backend is running at $baseUrl ($e)');
     } on http.ClientException catch (e) {
@@ -148,8 +151,10 @@ class ApiService {
         uri,
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
-      );
+      ).timeout(const Duration(seconds: 15));
       return _processResponse(response);
+    } on TimeoutException {
+      throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
       throw ApiException('Network unreachable: Please ensure backend is running at $baseUrl ($e)');
     } on http.ClientException catch (e) {
@@ -167,8 +172,10 @@ class ApiService {
         uri,
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
-      );
+      ).timeout(const Duration(seconds: 15));
       return _processResponse(response);
+    } on TimeoutException {
+      throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
       throw ApiException('Network unreachable: Please ensure backend is running at $baseUrl ($e)');
     } on http.ClientException catch (e) {
@@ -182,8 +189,10 @@ class ApiService {
     final headers = await _getHeaders();
 
     try {
-      final response = await _httpClient.delete(uri, headers: headers);
+      final response = await _httpClient.delete(uri, headers: headers).timeout(const Duration(seconds: 15));
       return _processResponse(response);
+    } on TimeoutException {
+      throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
       throw ApiException('Network unreachable: Please ensure backend is running at $baseUrl ($e)');
     } on http.ClientException catch (e) {
@@ -442,6 +451,38 @@ class ApiService {
   /// Deletes an inquiry
   Future<void> deleteInquiry(int inquiryId) async {
     await delete('/inquiries/$inquiryId');
+  }
+
+  // ─── Vendor Ratings ─────────────────────────────────────────────────────────
+
+  /// Submits or updates a rating (1-5) for a vendor
+  Future<Map<String, dynamic>> submitVendorRating({
+    required int vendorId,
+    required int ratingValue,
+  }) async {
+    final payload = {
+      'vendorId': vendorId,
+      'ratingValue': ratingValue,
+    };
+    final response = await post('/vendors/$vendorId/ratings', body: payload);
+    return (response as Map<String, dynamic>?) ?? {};
+  }
+
+  /// Fetches aggregate rating summary for a vendor
+  Future<Map<String, dynamic>> fetchVendorRatingSummary(int vendorId) async {
+    final response = await get('/vendors/$vendorId/ratings/summary');
+    return (response as Map<String, dynamic>?) ?? {};
+  }
+
+  /// Fetches authenticated customer's rating for a vendor
+  Future<Map<String, dynamic>?> fetchMyVendorRating(int vendorId) async {
+    try {
+      final response = await get('/vendors/$vendorId/ratings/my-rating');
+      return response as Map<String, dynamic>?;
+    } on ApiException catch (e) {
+      if (e.statusCode == 404) return null;
+      rethrow;
+    }
   }
 
   // ─── Internal Response Processing ──────────────────────────────────────────

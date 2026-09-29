@@ -4,6 +4,7 @@ import '../features/auth/screens/login_screen.dart';
 import '../features/auth/screens/onboarding_screen.dart';
 import '../features/auth/screens/register_screen.dart';
 import '../features/auth/screens/splash_screen.dart';
+import '../features/ai_chat/screens/ai_chat_screen.dart';
 
 import '../screens/main_navigation.dart';
 
@@ -49,6 +50,12 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: '/profile',
       builder: (context, state) => const MainNavigation(initialIndex: 3),
+    ),
+    // AI Wedding Planner — top-level route OUTSIDE the tab shell so the
+    // bottom bar is hidden.  Reached via context.push('/ai-chat').
+    GoRoute(
+      path: '/ai-chat',
+      builder: (context, state) => const AiChatScreen(),
     ),
   ],
 );

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -64,7 +65,7 @@ class InquiryApiService {
     // 1. Try standard route: /api/inquiries/customer
     final primaryUri = Uri.parse('$baseUrl/inquiries/customer');
     try {
-      final response = await _httpClient.get(primaryUri, headers: headers);
+      final response = await _httpClient.get(primaryUri, headers: headers).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is List) {
@@ -76,6 +77,8 @@ class InquiryApiService {
       } else if (response.statusCode != 404) {
         throw ApiException.fromResponse(response.statusCode, response.body);
       }
+    } on TimeoutException {
+      throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
       throw ApiException('Network unreachable at $baseUrl ($e)');
     } on http.ClientException catch (e) {
@@ -85,7 +88,7 @@ class InquiryApiService {
     // 2. Fallback to /api/inquiries
     final fallbackUri = Uri.parse('$baseUrl/inquiries');
     try {
-      final response = await _httpClient.get(fallbackUri, headers: headers);
+      final response = await _httpClient.get(fallbackUri, headers: headers).timeout(const Duration(seconds: 15));
       if (response.statusCode == 200) {
         final decoded = jsonDecode(response.body);
         if (decoded is List) {
@@ -96,6 +99,8 @@ class InquiryApiService {
         return [];
       }
       throw ApiException.fromResponse(response.statusCode, response.body);
+    } on TimeoutException {
+      throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
       throw ApiException('Network unreachable at $baseUrl ($e)');
     } on http.ClientException catch (e) {
