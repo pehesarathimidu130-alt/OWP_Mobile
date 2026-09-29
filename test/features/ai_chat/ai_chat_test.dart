@@ -102,10 +102,24 @@ void main() {
     testWidgets('subtitle prompt is visible', (tester) async {
       await tester.pumpWidget(_buildScreenHarness());
       await tester.pumpAndSettle();
-      expect(
-        find.text('How can I help plan your wedding today?'),
-        findsOneWidget,
-      );
+      
+      final prompts = [
+        'How can I help plan your wedding today?',
+        "Let's plan it together.",
+        'What about your wedding?',
+        'Ready to design your dream day?',
+        "Let's organise your special day.",
+      ];
+
+      // Find a Text widget that has one of the random prompts.
+      final subtitleFinder = find.byWidgetPredicate((widget) {
+        if (widget is Text && widget.data != null) {
+          return prompts.contains(widget.data);
+        }
+        return false;
+      });
+
+      expect(subtitleFinder, findsOneWidget);
     });
   });
 

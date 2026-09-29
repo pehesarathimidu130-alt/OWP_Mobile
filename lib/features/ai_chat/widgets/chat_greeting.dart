@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
@@ -20,9 +21,31 @@ String greetingPeriod(DateTime now) {
 /// Empty-state centred greeting widget.
 ///
 /// Shows the robot avatar circle, personalised Playfair Display headline, and
-/// a Poppins sub-heading prompting the user to start chatting.
-class ChatGreeting extends StatelessWidget {
+/// a randomly selected Poppins sub-heading prompting the user to start chatting.
+class ChatGreeting extends StatefulWidget {
   const ChatGreeting({super.key});
+
+  @override
+  State<ChatGreeting> createState() => _ChatGreetingState();
+}
+
+class _ChatGreetingState extends State<ChatGreeting> {
+  static const List<String> _prompts = [
+    'How can I help plan your wedding today?',
+    "Let's plan it together.",
+    'What about your wedding?',
+    'Ready to design your dream day?',
+    "Let's organise your special day.",
+  ];
+
+  late final String _subtitlePrompt;
+
+  @override
+  void initState() {
+    super.initState();
+    final random = math.Random();
+    _subtitlePrompt = _prompts[random.nextInt(_prompts.length)];
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -84,7 +107,7 @@ class ChatGreeting extends StatelessWidget {
 
             // Poppins subtitle.
             Text(
-              'How can I help plan your wedding today?',
+              _subtitlePrompt,
               style: GoogleFonts.poppins(
                 fontSize: 14,
                 fontWeight: FontWeight.w400,
