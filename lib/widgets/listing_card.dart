@@ -48,7 +48,7 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
     super.dispose();
   }
 
-  Future<void> _handleFavoriteTap(BuildContext context) async {
+  Future<void> _handleFavoriteTap() async {
     final authProvider = context.read<AuthProvider>();
     final favProvider = context.read<FavoritesProvider>();
 
@@ -59,7 +59,7 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
         reason: 'Sign in to save ${widget.listing.title} to your favourites',
         icon: Icons.favorite_border_rounded,
         onSuccess: () {
-          _handleFavoriteTap(context);
+          _handleFavoriteTap();
         },
       );
       return;
@@ -134,7 +134,7 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final favProvider = context.watch<FavoritesProvider>();
-    final isFav = favProvider.isFavorite(widget.listing.serviceId) || widget.listing.isFavorite;
+    final isFav = favProvider.isFavorite(widget.listing.serviceId);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -220,7 +220,7 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
                       color: Colors.transparent,
                       child: InkWell(
                         borderRadius: BorderRadius.circular(30),
-                        onTap: () => _handleFavoriteTap(context),
+                        onTap: _handleFavoriteTap,
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
@@ -250,12 +250,13 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
                   children: [
                     Text(
                       widget.listing.title,
-                      style: GoogleFonts.poppins(
+                      style: GoogleFonts.playfairDisplay(
                         fontSize: 16,
                         fontWeight: FontWeight.w700,
                         color: OleenaTheme.textDark,
+                        height: 1.25,
                       ),
-                      maxLines: 1,
+                      maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 6),

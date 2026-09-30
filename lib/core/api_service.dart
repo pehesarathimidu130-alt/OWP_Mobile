@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'app_config.dart';
+import 'session_events.dart';
 import '../models/listing_model.dart';
 import '../models/public_vendor_profile.dart';
 import '../models/vendor_model.dart';
@@ -131,7 +132,7 @@ class ApiService {
 
     try {
       final response = await _httpClient.get(uri, headers: headers).timeout(const Duration(seconds: 15));
-      return _processResponse(response);
+      return _processResponse(response, hasAuthHeader: headers.containsKey('Authorization'));
     } on TimeoutException {
       throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
@@ -152,7 +153,7 @@ class ApiService {
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       ).timeout(const Duration(seconds: 15));
-      return _processResponse(response);
+      return _processResponse(response, hasAuthHeader: headers.containsKey('Authorization'));
     } on TimeoutException {
       throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
@@ -173,7 +174,7 @@ class ApiService {
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       ).timeout(const Duration(seconds: 15));
-      return _processResponse(response);
+      return _processResponse(response, hasAuthHeader: headers.containsKey('Authorization'));
     } on TimeoutException {
       throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
@@ -190,7 +191,7 @@ class ApiService {
 
     try {
       final response = await _httpClient.delete(uri, headers: headers).timeout(const Duration(seconds: 15));
-      return _processResponse(response);
+      return _processResponse(response, hasAuthHeader: headers.containsKey('Authorization'));
     } on TimeoutException {
       throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
@@ -261,7 +262,7 @@ class ApiService {
     final uri = _buildUri('/favorites/$listingId');
     final headers = await _getHeaders();
     final response = await _httpClient.delete(uri, headers: headers);
-    final processed = _processResponse(response);
+    final processed = _processResponse(response, hasAuthHeader: headers.containsKey('Authorization'));
     if (processed is Map<String, dynamic> && processed.containsKey('isFavorite')) {
       return processed['isFavorite'] == true;
     }
@@ -401,7 +402,7 @@ class ApiService {
     try {
       final streamedResponse = await _httpClient.send(request);
       final response = await http.Response.fromStream(streamedResponse);
-      final result = _processResponse(response);
+      final result = _processResponse(response, hasAuthHeader: request.headers.containsKey('Authorization'));
       if (result is Map<String, dynamic>) {
         return result;
       }
@@ -487,8 +488,16 @@ class ApiService {
 
   // ─── Internal Response Processing ──────────────────────────────────────────
 
-  dynamic _processResponse(http.Response response) {
+  dynamic _processResponse(http.Response response, {bool hasAuthHeader = false}) {
     final statusCode = response.statusCode;
+
+    // 401 handling ONLY when the request actually carried an Authorization header.
+    // Unauthenticated calls (e.g. POST /api/auth/customer/login with wrong credentials)
+    // will NOT clear storage or redirect, allowing login to display its error.
+    if (statusCode == 401 && hasAuthHeader) {
+      _storage.delete(key: AppConfig.kAuthToken).catchError((_) {});
+      unawaited(SessionEvents.triggerUnauthorized());
+    }
 
     dynamic decodedBody;
     if (response.body.isNotEmpty) {
