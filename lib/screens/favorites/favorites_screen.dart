@@ -74,6 +74,33 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
+  String _friendlyErrorMessage(String? raw) {
+    if (raw == null || raw.trim().isEmpty) {
+      return 'Could not reach the server. Please check your connection.';
+    }
+    final lower = raw.toLowerCase();
+    if (lower.contains('401') || lower.contains('unauthorized') || lower.contains('session')) {
+      return 'Your session has expired. Please sign in again.';
+    }
+    if (lower.contains('500') ||
+        lower.contains('502') ||
+        lower.contains('503') ||
+        lower.contains('504') ||
+        lower.contains('server error')) {
+      return 'Server error. Please try again later.';
+    }
+    if (lower.contains('network') ||
+        lower.contains('socket') ||
+        lower.contains('connection') ||
+        lower.contains('timed out') ||
+        lower.contains('cannot reach') ||
+        lower.contains('failed host lookup') ||
+        lower.contains('unreachable')) {
+      return 'Could not reach the server. Please check your connection.';
+    }
+    return raw;
+  }
+
   Widget _buildContent(
     BuildContext context,
     bool isAuthenticated,
@@ -176,6 +203,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
     // 3. Error State
     if (favProvider.errorMessage != null && favProvider.favoriteListings.isEmpty) {
+      final friendlyError = _friendlyErrorMessage(favProvider.errorMessage);
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -194,19 +222,23 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                favProvider.errorMessage!,
+                friendlyError,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(fontSize: 12, color: OleenaTheme.textMuted),
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: () => favProvider.fetchFavorites(),
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Try Again'),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(
+                  'Retry',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: OleenaTheme.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
                 ),
               ),
             ],

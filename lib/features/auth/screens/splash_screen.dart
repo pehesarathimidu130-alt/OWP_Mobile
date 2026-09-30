@@ -49,20 +49,22 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _checkStateAndNavigate() async {
+    final auth = context.read<AuthProvider>();
     final startTime = DateTime.now();
     bool hasSeenOnboarding = false;
 
     // 1. Check Onboarding Flag ONLY (never check auth token to block startup)
     try {
       final prefs = await SharedPreferences.getInstance();
+      if (!mounted) return;
       hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;
       // Silently restore cached session in background so profile data is ready
-      if (mounted) {
-        context.read<AuthProvider>().checkAuthStatus();
-      }
+      auth.checkAuthStatus();
     } catch (_) {
       hasSeenOnboarding = false;
     }
+
+    if (!mounted) return;
 
     // 2. Minimum ~1.2s display before navigating for brand presentation
     final elapsed = DateTime.now().difference(startTime);

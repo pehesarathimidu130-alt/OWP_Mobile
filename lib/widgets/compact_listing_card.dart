@@ -8,23 +8,23 @@ import '../core/theme.dart';
 import '../models/listing_model.dart';
 import '../screens/details/listing_details_screen.dart';
 
-/// A reusable, premium Listing Card component with integrated Auth-Gated,
-/// optimistically updated Heart / Favorite button.
-class ListingCard extends StatefulWidget {
+/// A compact, 2-column grid listing card with integrated Auth-Gated favorite toggle.
+class CompactListingCard extends StatefulWidget {
   final Listing listing;
   final ValueChanged<bool>? onFavoriteChanged;
 
-  const ListingCard({
+  const CompactListingCard({
     super.key,
     required this.listing,
     this.onFavoriteChanged,
   });
 
   @override
-  State<ListingCard> createState() => _ListingCardState();
+  State<CompactListingCard> createState() => _CompactListingCardState();
 }
 
-class _ListingCardState extends State<ListingCard> with SingleTickerProviderStateMixin {
+class _CompactListingCardState extends State<CompactListingCard>
+    with SingleTickerProviderStateMixin {
   late AnimationController _animController;
   late Animation<double> _scaleAnimation;
   bool _isToggling = false;
@@ -52,7 +52,6 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
     final authProvider = context.read<AuthProvider>();
     final favProvider = context.read<FavoritesProvider>();
 
-    // 1. Auth Gate: Check if user is authenticated
     if (!authProvider.isAuthenticated) {
       await requireLogin(
         context,
@@ -68,11 +67,9 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
     if (_isToggling) return;
     _isToggling = true;
 
-    // Trigger bounce micro-animation
     _animController.forward(from: 0.0);
 
     try {
-      // 2. Optimistic UI Update & Background Sync via Provider
       final finalState = await favProvider.toggleFavorite(widget.listing);
       widget.listing.isFavorite = finalState;
       widget.onFavoriteChanged?.call(finalState);
@@ -94,64 +91,56 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
                     finalState
                         ? 'Added "${widget.listing.title}" to Favourites'
                         : 'Removed from Favourites',
-                    style: GoogleFonts.poppins(fontSize: 13),
+                    style: GoogleFonts.poppins(fontSize: 12),
                   ),
                 ),
               ],
             ),
-            duration: const Duration(seconds: 2),
+            backgroundColor: OleenaTheme.primary,
             behavior: SnackBarBehavior.floating,
-            backgroundColor: finalState ? OleenaTheme.primary : Colors.black87,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            duration: const Duration(seconds: 2),
           ),
         );
       }
     } catch (e) {
-      // 3. Graceful rollback and error feedback
       if (mounted) {
-        ScaffoldMessenger.of(context).hideCurrentSnackBar();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Could not update favourite: $e',
-              style: GoogleFonts.poppins(fontSize: 13),
-            ),
+            content: Text('Could not update favourite: $e'),
             backgroundColor: Colors.redAccent,
-            duration: const Duration(seconds: 3),
-            behavior: SnackBarBehavior.floating,
           ),
         );
       }
     } finally {
       if (mounted) {
-        setState(() {
-          _isToggling = false;
-        });
+        setState(() => _isToggling = false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // The heart is driven ONLY by FavoritesProvider (no || listing.isFavorite fallback)
     final favProvider = context.watch<FavoritesProvider>();
-    final isFav = favProvider.isFavorite(widget.listing.serviceId);
+    final bool isFav = favProvider.isFavorite(widget.listing.serviceId);
+    final resolvedImageUrl = Listing.resolveImageUrl(widget.listing.coverImageUrl);
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
       child: Material(
         color: Colors.transparent,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: () {
@@ -164,75 +153,69 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // ── Cover Image + Category Tag & Heart Icon ──────────────────
+              // ── Image with Category Chip & Favorite Button ────────
               Stack(
                 children: [
-                  AspectRatio(
-                    aspectRatio: 16 / 9,
+                  SizedBox(
+                    height: 130,
+                    width: double.infinity,
                     child: Image.network(
-                      widget.listing.coverImageUrl,
+                      resolvedImageUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) => Container(
                         color: Colors.grey.shade200,
-                        child: const Center(
+                        child: Center(
                           child: Icon(
                             Icons.image_not_supported_outlined,
-                            color: Colors.grey,
-                            size: 40,
+                            color: Colors.grey.shade400,
+                            size: 32,
                           ),
                         ),
                       ),
                     ),
                   ),
 
-                  // Category Badge Pill
+                  // Category Badge (top-left)
                   Positioned(
-                    top: 12,
-                    left: 12,
+                    top: 8,
+                    left: 8,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: Colors.black.withValues(alpha: 0.65),
-                        borderRadius: BorderRadius.circular(20),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.2),
-                            blurRadius: 4,
-                          ),
-                        ],
+                        color: OleenaTheme.primary.withValues(alpha: 0.9),
+                        borderRadius: BorderRadius.circular(12),
                       ),
                       child: Text(
-                        widget.listing.category,
+                        widget.listing.category.toUpperCase(),
                         style: GoogleFonts.poppins(
                           color: Colors.white,
-                          fontSize: 11,
+                          fontSize: 9,
                           fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
                         ),
                       ),
                     ),
                   ),
 
-                  // Heart / Favorite Button
+                  // Favorite Button (top-right)
                   Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(30),
-                        onTap: _handleFavoriteTap,
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withValues(alpha: 0.40),
-                            shape: BoxShape.circle,
-                          ),
-                          child: ScaleTransition(
-                            scale: _scaleAnimation,
+                    top: 6,
+                    right: 6,
+                    child: ScaleTransition(
+                      scale: _scaleAnimation,
+                      child: Material(
+                        color: Colors.white.withValues(alpha: 0.92),
+                        shape: const CircleBorder(),
+                        elevation: 1,
+                        child: InkWell(
+                          onTap: _handleFavoriteTap,
+                          customBorder: const CircleBorder(),
+                          child: Padding(
+                            padding: const EdgeInsets.all(6),
                             child: Icon(
                               isFav ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                              color: isFav ? const Color(0xFFFF3366) : Colors.white,
-                              size: 22,
+                              size: 16,
+                              color: isFav ? Colors.red : OleenaTheme.textDark,
                             ),
                           ),
                         ),
@@ -242,78 +225,88 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
                 ],
               ),
 
-              // ── Listing Specs & Parent Vendor Details ─────────────────────
+              // ── Text Details ──────────────────────────────────────
               Padding(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
+                    // Title (2 lines max)
                     Text(
                       widget.listing.title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                       style: GoogleFonts.playfairDisplay(
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                         color: OleenaTheme.textDark,
                         height: 1.25,
                       ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Vendor Name + Verified
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            widget.listing.vendor.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                              color: OleenaTheme.textMuted,
+                            ),
+                          ),
+                        ),
+                        if (widget.listing.vendor.isApproved) ...[
+                          const SizedBox(width: 2),
+                          const Icon(
+                            Icons.verified_rounded,
+                            size: 12,
+                            color: OleenaTheme.primary,
+                          ),
+                        ],
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+
+                    // Rating & Reviews
+                    Row(
+                      children: [
+                        const Icon(Icons.star_rounded, size: 14, color: Color(0xFFF59E0B)),
+                        const SizedBox(width: 3),
+                        Text(
+                          widget.listing.vendor.rating.toStringAsFixed(1),
+                          style: GoogleFonts.poppins(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: OleenaTheme.textDark,
+                          ),
+                        ),
+                        Text(
+                          ' (${widget.listing.vendor.reviewCount})',
+                          style: GoogleFonts.poppins(
+                            fontSize: 10,
+                            color: OleenaTheme.textMuted,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 6),
 
-                    // Parent Vendor Name & Location
-                    Row(
-                      children: [
-                        const Icon(
-                          Icons.storefront_rounded,
-                          size: 15,
-                          color: OleenaTheme.primary,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            '${widget.listing.vendor.name} • ${widget.listing.vendor.location}',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              color: OleenaTheme.textMuted,
-                              fontWeight: FontWeight.w500,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 12),
-
-                    // Price & Rating Row
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          widget.listing.formattedPrice,
-                          style: GoogleFonts.poppins(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: OleenaTheme.primary,
-                          ),
-                        ),
-                        Row(
-                          children: [
-                            const Icon(Icons.star_rounded, size: 16, color: Colors.amber),
-                            const SizedBox(width: 4),
-                            Text(
-                              widget.listing.rating.toStringAsFixed(1),
-                              style: GoogleFonts.poppins(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: OleenaTheme.textDark,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                    // Price
+                    Text(
+                      widget.listing.formattedPrice,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: OleenaTheme.primary,
+                      ),
                     ),
                   ],
                 ),

@@ -41,6 +41,13 @@ class FakeAuthProvider extends ChangeNotifier implements AuthProvider {
 
   @override
   Future<void> register(Map<String, dynamic> userData) async {}
+
+  @override
+  Future<void> updateUserSession({String? fullName, String? email}) async {
+    if (fullName != null) this.fullName = fullName;
+    if (email != null) this.email = email;
+    notifyListeners();
+  }
 }
 
 void main() {

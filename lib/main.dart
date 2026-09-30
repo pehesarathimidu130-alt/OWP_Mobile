@@ -9,6 +9,8 @@ import 'core/theme.dart';
 import 'features/profile/providers/customer_profile_provider.dart';
 import 'features/profile/providers/notification_preferences_provider.dart';
 
+import 'core/session_events.dart';
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChrome.setPreferredOrientations([
@@ -29,17 +31,53 @@ void main() async {
   runApp(const OleenaApp());
 }
 
-class OleenaApp extends StatelessWidget {
+class OleenaApp extends StatefulWidget {
   const OleenaApp({super.key});
+
+  @override
+  State<OleenaApp> createState() => _OleenaAppState();
+}
+
+class _OleenaAppState extends State<OleenaApp> {
+  late final AuthProvider _authProvider;
+  late final FavoritesProvider _favoritesProvider;
+  late final CustomerProfileProvider _customerProfileProvider;
+  late final NotificationPreferencesProvider _notificationPreferencesProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    _authProvider = AuthProvider();
+    _favoritesProvider = FavoritesProvider();
+    _customerProfileProvider = CustomerProfileProvider();
+    _notificationPreferencesProvider = NotificationPreferencesProvider();
+
+    // Register single root callback for 401 Unauthorized session expiration
+    SessionEvents.onUnauthorized = () async {
+      await _authProvider.logout();
+      _favoritesProvider.clear();
+      _customerProfileProvider.clear();
+      appRouter.go('/login');
+    };
+  }
+
+  @override
+  void dispose() {
+    _authProvider.dispose();
+    _favoritesProvider.dispose();
+    _customerProfileProvider.dispose();
+    _notificationPreferencesProvider.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
-        ChangeNotifierProvider(create: (_) => FavoritesProvider()),
-        ChangeNotifierProvider(create: (_) => CustomerProfileProvider()),
-        ChangeNotifierProvider(create: (_) => NotificationPreferencesProvider()),
+        ChangeNotifierProvider.value(value: _authProvider),
+        ChangeNotifierProvider.value(value: _favoritesProvider),
+        ChangeNotifierProvider.value(value: _customerProfileProvider),
+        ChangeNotifierProvider.value(value: _notificationPreferencesProvider),
       ],
       child: MaterialApp.router(
         title: 'Oleena Wedding Planner',
@@ -50,3 +88,4 @@ class OleenaApp extends StatelessWidget {
     );
   }
 }
+

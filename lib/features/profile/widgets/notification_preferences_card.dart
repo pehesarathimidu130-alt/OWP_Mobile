@@ -1,20 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:provider/provider.dart';
 import '../../../core/theme.dart';
-import '../providers/notification_preferences_provider.dart';
 
-/// Card widget displaying notification preference toggle switches.
+/// Card widget displaying notification preference options.
 ///
-/// Reads and writes through [NotificationPreferencesProvider].
-/// Designed to be dropped into the profile screen body without external state.
+/// Note: Backend currently lacks customer notification preference endpoints.
+/// In accordance with platform integrity rules, unsupported features (Weekly Digest &
+/// Promotions) have been removed, and remaining toggles are displayed in a disabled
+/// state with a 'Coming soon' indicator rather than faking local-only persistence.
 class NotificationPreferencesCard extends StatelessWidget {
   const NotificationPreferencesCard({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final prefs = context.watch<NotificationPreferencesProvider>();
-
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -31,7 +29,7 @@ class NotificationPreferencesCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section header
+          // Section header with 'Coming soon' pill
           Row(
             children: [
               Container(
@@ -47,12 +45,30 @@ class NotificationPreferencesCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                'Notification Preferences',
-                style: GoogleFonts.poppins(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: OleenaTheme.textDark,
+              Expanded(
+                child: Text(
+                  'Notification Preferences',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: OleenaTheme.textDark,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F4F6),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Text(
+                  'Coming soon',
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: OleenaTheme.textMuted,
+                  ),
                 ),
               ),
             ],
@@ -60,44 +76,16 @@ class NotificationPreferencesCard extends StatelessWidget {
 
           const SizedBox(height: 14),
 
-          _NotifToggle(
-            icon: Icons.local_offer_outlined,
-            title: 'New Offers & Packages',
-            subtitle: 'Alerts when vendors post new deals',
-            value: prefs.newOffers,
-            onChanged: prefs.toggleNewOffers,
-          ),
-          const Divider(height: 1, thickness: 0.6),
-          _NotifToggle(
+          const _DisabledNotifRow(
             icon: Icons.chat_bubble_outline_rounded,
             title: 'Inquiry Updates',
             subtitle: 'Status changes on your inquiries',
-            value: prefs.inquiryUpdates,
-            onChanged: prefs.toggleInquiryUpdates,
           ),
           const Divider(height: 1, thickness: 0.6),
-          _NotifToggle(
-            icon: Icons.event_outlined,
-            title: 'Wedding Reminders',
-            subtitle: 'Countdown and planning milestones',
-            value: prefs.weddingReminders,
-            onChanged: prefs.toggleWeddingReminders,
-          ),
-          const Divider(height: 1, thickness: 0.6),
-          _NotifToggle(
-            icon: Icons.mail_outline_rounded,
-            title: 'Weekly Digest',
-            subtitle: 'A curated weekly roundup',
-            value: prefs.weeklyDigest,
-            onChanged: prefs.toggleWeeklyDigest,
-          ),
-          const Divider(height: 1, thickness: 0.6),
-          _NotifToggle(
-            icon: Icons.campaign_outlined,
-            title: 'Promotions',
-            subtitle: 'Special offers from OWP partners',
-            value: prefs.promotions,
-            onChanged: prefs.togglePromotions,
+          const _DisabledNotifRow(
+            icon: Icons.favorite_border_rounded,
+            title: 'Favourite Price Changes',
+            subtitle: 'Alerts when saved services change prices',
           ),
         ],
       ),
@@ -105,20 +93,16 @@ class NotificationPreferencesCard extends StatelessWidget {
   }
 }
 
-/// Single row toggle item inside [NotificationPreferencesCard].
-class _NotifToggle extends StatelessWidget {
+/// Single disabled row item inside [NotificationPreferencesCard].
+class _DisabledNotifRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
-  final bool value;
-  final ValueChanged<bool> onChanged;
 
-  const _NotifToggle({
+  const _DisabledNotifRow({
     required this.icon,
     required this.title,
     required this.subtitle,
-    required this.value,
-    required this.onChanged,
   });
 
   @override
@@ -127,7 +111,7 @@ class _NotifToggle extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: OleenaTheme.textMuted),
+          Icon(icon, size: 18, color: Colors.grey.shade400),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -138,24 +122,22 @@ class _NotifToggle extends StatelessWidget {
                   style: GoogleFonts.poppins(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: OleenaTheme.textDark,
+                    color: Colors.grey.shade700,
                   ),
                 ),
                 Text(
                   subtitle,
                   style: GoogleFonts.poppins(
                     fontSize: 11,
-                    color: OleenaTheme.textMuted,
+                    color: Colors.grey.shade400,
                   ),
                 ),
               ],
             ),
           ),
           Switch.adaptive(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: OleenaTheme.primary,
-            activeTrackColor: OleenaTheme.primaryTint,
+            value: false,
+            onChanged: null,
             inactiveTrackColor: Colors.grey.shade200,
             inactiveThumbColor: Colors.grey.shade400,
           ),
@@ -164,3 +146,4 @@ class _NotifToggle extends StatelessWidget {
     );
   }
 }
+

@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -62,15 +64,53 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
+        String friendlyMessage;
+        if (e.statusCode == 401 ||
+            e.message.toLowerCase().contains('401') ||
+            e.message.toLowerCase().contains('unauthorized') ||
+            e.message.toLowerCase().contains('session')) {
+          friendlyMessage = 'Your session has expired. Please sign in again.';
+        } else if ((e.statusCode != null && e.statusCode! >= 500 && e.statusCode! < 600) ||
+            e.message.toLowerCase().contains('500') ||
+            e.message.toLowerCase().contains('502') ||
+            e.message.toLowerCase().contains('503') ||
+            e.message.toLowerCase().contains('server error')) {
+          friendlyMessage = 'Server error. Please try again later.';
+        } else if (e.message.toLowerCase().contains('network') ||
+            e.message.toLowerCase().contains('socket') ||
+            e.message.toLowerCase().contains('connection') ||
+            e.message.toLowerCase().contains('timed out') ||
+            e.message.toLowerCase().contains('cannot reach') ||
+            e.message.toLowerCase().contains('unreachable') ||
+            e.message.toLowerCase().contains('failed host lookup')) {
+          friendlyMessage = 'Could not reach the server. Please check your connection.';
+        } else {
+          friendlyMessage = e.message;
+        }
+
         setState(() {
-          _errorMessage = e.message;
+          _errorMessage = friendlyMessage;
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } on SocketException {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Failed to load inquiries: $e';
+          _errorMessage = 'Could not reach the server. Please check your connection.';
+          _isLoading = false;
+        });
+      }
+    } on TimeoutException {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Could not reach the server. Please check your connection.';
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Could not reach the server. Please check your connection.';
           _isLoading = false;
         });
       }
@@ -172,7 +212,11 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
 
   void _showEditInquiryModal(Inquiry inquiry) {
     DateTime? editDate = inquiry.weddingDate;
-    final guestCtrl = TextEditingController(text: inquiry.guestCount?.toString() ?? '');
+    final guestCtrl = TextEditingController(
+      text: (inquiry.guestCount != null && inquiry.guestCount! > 0)
+          ? inquiry.guestCount.toString()
+          : '',
+    );
     final budgetCtrl = TextEditingController(
         text: inquiry.budget != null ? inquiry.budget!.toStringAsFixed(0) : '');
     final msgCtrl = TextEditingController(text: inquiry.message ?? '');
@@ -283,7 +327,7 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Guests',
+                                Text('Guests (optional)',
                                     style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
                                 const SizedBox(height: 6),
                                 TextField(
@@ -293,7 +337,7 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
                                     contentPadding:
                                         const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                                    hintText: 'e.g. 200',
+                                    hintText: 'e.g. 200 (optional)',
                                   ),
                                 ),
                               ],
@@ -703,7 +747,7 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Browse verified wedding venues, photographers, and caterers, then send them your vision and questions.',
+              'No inquiries yet. Find a vendor and send your first inquiry.',
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 fontSize: 13,
@@ -768,7 +812,7 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
             ElevatedButton.icon(
               onPressed: _fetchInquiries,
               icon: const Icon(Icons.refresh_rounded, size: 16),
-              label: const Text('Try Again'),
+              label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: OleenaTheme.primary,
                 foregroundColor: Colors.white,

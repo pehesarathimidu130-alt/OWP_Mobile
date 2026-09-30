@@ -89,7 +89,14 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
 
   void _showEditSheet() {
     DateTime? editDate = _inquiry.weddingDate;
-    final guestCtrl = TextEditingController(text: _inquiry.guestCount?.toString() ?? '');
+    // Only pre-populate and show guest count when the inquiry already carries
+    // one (backward-compat: new inquiries for Photography/Music/Decoration
+    // will have guestCount == null and the row stays hidden).
+    final bool hasExistingGuestCount =
+        _inquiry.guestCount != null && _inquiry.guestCount! > 0;
+    final guestCtrl = TextEditingController(
+      text: hasExistingGuestCount ? _inquiry.guestCount.toString() : '',
+    );
     final budgetCtrl = TextEditingController(
         text: _inquiry.budget != null ? _inquiry.budget!.toStringAsFixed(0) : '');
     final msgCtrl = TextEditingController(text: _inquiry.message ?? '');
@@ -176,46 +183,64 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                       const SizedBox(height: 14),
 
                       // Guests & Budget
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Guests', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: guestCtrl,
-                                  keyboardType: TextInputType.number,
-                                  decoration: InputDecoration(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      // Guest count is shown only when the inquiry already
+                      // carries a value (backward-compat for old inquiries).
+                      if (hasExistingGuestCount) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Guests (optional)', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 6),
+                                  TextField(
+                                    controller: guestCtrl,
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                      hintText: 'e.g. 200 (optional)',
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Budget (LKR)', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: budgetCtrl,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  decoration: InputDecoration(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Budget (LKR)', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 6),
+                                  TextField(
+                                    controller: budgetCtrl,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: InputDecoration(
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                      ] else ...[
+                        // Budget only (no guest count for this inquiry)
+                        Text('Budget (LKR)', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: budgetCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
 
                       // Message
                       Text('Message', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
@@ -238,7 +263,9 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                               : () async {
                                   setModalState(() => isSaving = true);
                                   try {
-                                    final guests = int.tryParse(guestCtrl.text.trim());
+                                    final guests = hasExistingGuestCount
+                                        ? int.tryParse(guestCtrl.text.trim())
+                                        : null;
                                     final budget = double.tryParse(budgetCtrl.text.replaceAll(',', '').trim());
                                     await _apiService.updateInquiry(
                                       inquiryId: _inquiry.inquiryId,
@@ -465,14 +492,14 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                       'Wedding / Event Date',
                       _inquiry.formattedWeddingDate,
                     ),
-                    const Divider(height: 20),
-                    _buildDetailRow(
-                      Icons.people_alt_outlined,
-                      'Expected Guests',
-                      _inquiry.guestCount != null && _inquiry.guestCount! > 0
-                          ? '${_inquiry.guestCount} guests'
-                          : 'Not specified',
-                    ),
+                    if (_inquiry.guestCount != null && _inquiry.guestCount! > 0) ...[
+                      const Divider(height: 20),
+                      _buildDetailRow(
+                        Icons.people_alt_outlined,
+                        'Expected Guests',
+                        '${_inquiry.guestCount} guests',
+                      ),
+                    ],
                     const Divider(height: 20),
                     _buildDetailRow(
                       Icons.payments_outlined,
