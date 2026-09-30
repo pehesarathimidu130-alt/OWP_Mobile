@@ -16,6 +16,7 @@ class SendInquiryScreen extends StatefulWidget {
   final String? vendorName;
   final String? serviceTitle;
   final String? coverImageUrl;
+  final String? category;
 
   const SendInquiryScreen({
     super.key,
@@ -26,6 +27,7 @@ class SendInquiryScreen extends StatefulWidget {
     this.vendorName,
     this.serviceTitle,
     this.coverImageUrl,
+    this.category,
   });
 
   @override
@@ -38,16 +40,59 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
   final ImagePicker _picker = ImagePicker();
 
   DateTime? _selectedDate;
-  final TextEditingController _guestCountController = TextEditingController();
   final TextEditingController _budgetController = TextEditingController();
+  final TextEditingController _guestCountController = TextEditingController();
   final TextEditingController _messageController = TextEditingController();
 
   XFile? _selectedImage;
   Uint8List? _selectedImageBytes;
   bool _isSubmitting = false;
 
+  // ── Category helpers ─────────────────────────────────────────────────────
+  // Uses the same keyword matching as ExploreScreen._categories chips and
+  // Listing._resolveCategoryIcon so category identification is consistent.
+  static bool _isVenueOrHotel(String? cat) {
+    if (cat == null) return false;
+    final c = cat.toLowerCase();
+    return c.contains('venue') || c.contains('hotel');
+  }
+
+  static bool _isCatering(String? cat) {
+    if (cat == null) return false;
+    final c = cat.toLowerCase();
+    return c.contains('cater') || c.contains('food');
+  }
+
+  /// Guest count field is shown only for Hotel/Venue and Catering.
+  bool get _showGuestCount =>
+      _isVenueOrHotel(_displayCategory) || _isCatering(_displayCategory);
+
+  /// Category-specific hint for the message field.
+  String get _messageHint {
+    final cat = _displayCategory?.toLowerCase() ?? '';
+    if (cat.contains('venue') || cat.contains('hotel')) {
+      return 'Tell the vendor about your event type, expected guests and preferred dates.';
+    }
+    if (cat.contains('cater') || cat.contains('food')) {
+      return 'Tell the vendor about guest count, cuisine preferences and dietary needs.';
+    }
+    if (cat.contains('photo') || cat.contains('video')) {
+      return 'Tell the vendor about the event, coverage hours and the style you like.';
+    }
+    if (cat.contains('decor') || cat.contains('flower') || cat.contains('flora')) {
+      return 'Tell the vendor about the venue, theme and colour palette.';
+    }
+    if (cat.contains('music') || cat.contains('dj') || cat.contains('band')) {
+      return 'Tell the vendor about the venue, event timing and the style of music you want.';
+    }
+    return 'Tell the vendor about your event, schedule, package requirements, or any questions...';
+  }
+
   int get _targetVendorId {
     if (widget.vendorId != null && widget.vendorId! > 0) return widget.vendorId!;
+    if (widget.listing != null && widget.listing!.vendor.vendorId > 0) {
+      return widget.listing!.vendor.vendorId;
+    }
     if (widget.listing != null && widget.listing!.vendor.id.isNotEmpty) {
       final parsed = int.tryParse(widget.listing!.vendor.id);
       if (parsed != null && parsed > 0) return parsed;
@@ -72,9 +117,18 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
     return 'Wedding Vendor';
   }
 
-  String? get _displayServiceTitle {
+  String get _displayServiceTitle {
     if (widget.serviceTitle != null && widget.serviceTitle!.isNotEmpty) return widget.serviceTitle!;
     if (widget.listing != null && widget.listing!.title.isNotEmpty) return widget.listing!.title;
+    return 'General Service Inquiry';
+  }
+
+  String? get _displayCategory {
+    if (widget.category != null && widget.category!.isNotEmpty) return widget.category;
+    if (widget.listing != null && widget.listing!.category.isNotEmpty) return widget.listing!.category;
+    if (widget.vendor != null && widget.vendor!.category.isNotEmpty) {
+      return widget.vendor!.category;
+    }
     return null;
   }
 
@@ -89,8 +143,8 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
 
   @override
   void dispose() {
-    _guestCountController.dispose();
     _budgetController.dispose();
+    _guestCountController.dispose();
     _messageController.dispose();
     super.dispose();
   }
@@ -215,21 +269,15 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
       return;
     }
 
-    if (_selectedDate == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please select your preferred wedding date.'),
-          backgroundColor: Colors.orange,
-        ),
-      );
-      return;
-    }
-
     setState(() => _isSubmitting = true);
 
     try {
-      final guestCount = int.tryParse(_guestCountController.text.trim());
-      final budget = double.tryParse(_budgetController.text.replaceAll(',', '').trim());
+      final budgetText = _budgetController.text.replaceAll(',', '').trim();
+      final budget = budgetText.isNotEmpty ? double.tryParse(budgetText) : null;
+
+      final guestCount = _showGuestCount
+          ? int.tryParse(_guestCountController.text.trim())
+          : null;
 
       await _apiService.submitInquiry(
         vendorId: _targetVendorId,
@@ -318,12 +366,12 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // ── Vendor / Service Header Card ─────────────────────────────
+                // ── Listing Title, Vendor Name & Category Pill at Top ─────────
                 _buildHeaderCard(),
                 const SizedBox(height: 24),
 
-                // ── 1. Wedding Date Picker ───────────────────────────────────
-                _buildSectionLabel('Wedding / Event Date', Icons.calendar_month_rounded),
+                // ── 1. Preferred Event Date (Optional) ───────────────────────
+                _buildSectionLabel('Preferred Event Date (Optional)', Icons.calendar_month_rounded),
                 const SizedBox(height: 8),
                 InkWell(
                   onTap: _pickDate,
@@ -349,7 +397,7 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
                         Expanded(
                           child: Text(
                             _selectedDate == null
-                                ? 'Tap to select your wedding date'
+                                ? 'Flexible / Date not decided yet'
                                 : '${_selectedDate!.year}-${_selectedDate!.month.toString().padLeft(2, '0')}-${_selectedDate!.day.toString().padLeft(2, '0')}',
                             style: GoogleFonts.poppins(
                               fontSize: 14,
@@ -358,91 +406,80 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
                             ),
                           ),
                         ),
-                        const Icon(Icons.arrow_drop_down_rounded, color: Colors.grey),
+                        if (_selectedDate != null)
+                          IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 18, color: Colors.grey),
+                            onPressed: () => setState(() => _selectedDate = null),
+                            visualDensity: VisualDensity.compact,
+                          )
+                        else
+                          const Icon(Icons.arrow_drop_down_rounded, color: Colors.grey),
                       ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 20),
 
-                // ── 2. Guest Count & 3. Budget Row ───────────────────────────
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Guest Count
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionLabel('Guest Count', Icons.people_outline_rounded),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _guestCountController,
-                            keyboardType: TextInputType.number,
-                            style: GoogleFonts.poppins(fontSize: 14),
-                            decoration: _inputDecoration(
-                              hintText: 'e.g. 150',
-                              prefixIcon: Icons.people_alt_outlined,
-                            ),
-                            validator: (val) {
-                              if (val == null || val.trim().isEmpty) {
-                                return 'Required';
-                              }
-                              final num = int.tryParse(val.trim());
-                              if (num == null || num <= 0) {
-                                return 'Invalid number';
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 14),
-
-                    // Budget
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildSectionLabel('Budget (LKR)', Icons.payments_outlined),
-                          const SizedBox(height: 8),
-                          TextFormField(
-                            controller: _budgetController,
-                            keyboardType: TextInputType.number,
-                            style: GoogleFonts.poppins(fontSize: 14),
-                            decoration: _inputDecoration(
-                              hintText: 'e.g. 250,000',
-                              prefixText: 'LKR ',
-                            ),
-                            validator: (val) {
-                              if (val == null || val.trim().isEmpty) {
-                                return 'Required';
-                              }
-                              final num = double.tryParse(val.replaceAll(',', '').trim());
-                              if (num == null || num <= 0) {
-                                return 'Invalid budget';
-                              }
-                              return null;
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+                // ── 2. Budget (Optional) ─────────────────────────────────────
+                _buildSectionLabel('Budget (LKR), optional', Icons.payments_outlined),
+                const SizedBox(height: 8),
+                TextFormField(
+                  controller: _budgetController,
+                  keyboardType: TextInputType.number,
+                  style: GoogleFonts.poppins(fontSize: 14),
+                  decoration: _inputDecoration(
+                    hintText: 'e.g. 250,000',
+                    prefixText: 'LKR ',
+                  ),
+                  validator: (val) {
+                    if (val == null || val.trim().isEmpty) {
+                      return null; // Optional
+                    }
+                    final num = double.tryParse(val.replaceAll(',', '').trim());
+                    if (num == null || num <= 0) {
+                      return 'Please enter a valid positive budget amount';
+                    }
+                    return null;
+                  },
                 ),
                 const SizedBox(height: 20),
 
-                // ── 4. Message (Multiline) ───────────────────────────────────
+                // ── 3. Guest Count (Optional – Hotel/Venue and Catering only) ──
+                // Shown only when category is Hotel/Venue or Catering, matching
+                // the same keyword rules as ExploreScreen._categories chips.
+                if (_showGuestCount) ...[
+                  _buildSectionLabel('Expected Guests (optional)', Icons.people_alt_outlined),
+                  const SizedBox(height: 8),
+                  TextFormField(
+                    controller: _guestCountController,
+                    keyboardType: TextInputType.number,
+                    style: GoogleFonts.poppins(fontSize: 14),
+                    decoration: _inputDecoration(
+                      hintText: 'e.g. 200',
+                    ),
+                    validator: (val) {
+                      if (val == null || val.trim().isEmpty) return null; // Optional
+                      final n = int.tryParse(val.trim());
+                      if (n == null || n <= 0) {
+                        return 'Please enter a valid positive number.';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 20),
+                ],
+
+                // ── 4. Message (Required, 500-char counter, category-specific hint) ──
                 _buildSectionLabel('Message to Vendor', Icons.chat_bubble_outline_rounded),
                 const SizedBox(height: 8),
                 TextFormField(
                   controller: _messageController,
-                  maxLines: 4,
+                  maxLength: 500,
+                  maxLines: 5,
                   minLines: 3,
                   style: GoogleFonts.poppins(fontSize: 14),
                   decoration: _inputDecoration(
-                    hintText: 'Tell the vendor about your wedding theme, schedule, specific package requirements, or any questions...',
+                    hintText: _messageHint,
                   ),
                   validator: (val) {
                     if (val == null || val.trim().isEmpty) {
@@ -454,9 +491,9 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 12),
 
-                // ── 5. Photo Attachment (Device Feature via ImagePicker) ─────
+                // ── 5. Inspiration Photo (Optional) ──────────────────────────
                 _buildSectionLabel('Inspiration Photo (Optional)', Icons.add_photo_alternate_outlined),
                 const SizedBox(height: 8),
                 _buildPhotoAttachmentArea(),
@@ -511,6 +548,10 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
   }
 
   Widget _buildHeaderCard() {
+    final resolvedImage = _displayCoverImage != null
+        ? Listing.resolveImageUrl(_displayCoverImage)
+        : null;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -525,19 +566,20 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
         ],
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Thumbnail
           Container(
-            width: 56,
-            height: 56,
+            width: 64,
+            height: 64,
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
+              borderRadius: BorderRadius.circular(14),
               color: OleenaTheme.primaryTint,
             ),
             clipBehavior: Clip.antiAlias,
-            child: _displayCoverImage != null
+            child: resolvedImage != null
                 ? Image.network(
-                    _displayCoverImage!,
+                    resolvedImage,
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) =>
                         const Icon(Icons.storefront_rounded, color: OleenaTheme.primary),
@@ -545,41 +587,58 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
                 : const Icon(Icons.storefront_rounded, color: OleenaTheme.primary, size: 28),
           ),
           const SizedBox(width: 14),
+
+          // Listing Title, Vendor Name, Category Pill
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (_displayServiceTitle != null) ...[
-                  Text(
-                    _displayServiceTitle!,
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: OleenaTheme.textDark,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                // Listing Title
+                Text(
+                  _displayServiceTitle,
+                  style: GoogleFonts.playfairDisplay(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    color: OleenaTheme.textDark,
+                    height: 1.25,
                   ),
-                  const SizedBox(height: 2),
-                ],
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+
+                // Vendor Name
                 Text(
                   _displayVendorName,
                   style: GoogleFonts.poppins(
-                    fontSize: 13,
+                    fontSize: 12,
                     color: OleenaTheme.primary,
                     fontWeight: FontWeight.w600,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Typically responds within 24 hours',
-                  style: GoogleFonts.poppins(
-                    fontSize: 11,
-                    color: Colors.grey.shade500,
+                const SizedBox(height: 6),
+
+                // Category Pill
+                if (_displayCategory != null)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: OleenaTheme.primaryTint,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: OleenaTheme.primary.withValues(alpha: 0.25)),
+                    ),
+                    child: Text(
+                      _displayCategory!.toUpperCase(),
+                      style: GoogleFonts.poppins(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w600,
+                        color: OleenaTheme.primary,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
                   ),
-                ),
               ],
             ),
           ),

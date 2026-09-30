@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_client.dart';
+import 'session_events.dart';
 
 /// Provider managing authentication state, customer profile data, and JWT tokens.
 class AuthProvider extends ChangeNotifier {
@@ -177,6 +178,9 @@ class AuthProvider extends ChangeNotifier {
       if (_role != null) {
         await _storage.write(key: 'user_role', value: _role!);
       }
+
+      // Reset unauthorized guard on successful authentication
+      SessionEvents.resetUnauthorizedGuard();
     }
   }
 
@@ -203,6 +207,19 @@ class AuthProvider extends ChangeNotifier {
     } catch (_) {
       // Ignored if malformed
     }
+  }
+
+  /// Updates session display details (e.g. after customer edits their profile)
+  Future<void> updateUserSession({String? fullName, String? email}) async {
+    if (fullName != null && fullName.trim().isNotEmpty) {
+      _fullName = fullName.trim();
+      await _storage.write(key: 'user_full_name', value: _fullName!);
+    }
+    if (email != null && email.trim().isNotEmpty) {
+      _email = email.trim();
+      await _storage.write(key: 'user_email', value: _email!);
+    }
+    notifyListeners();
   }
 
   /// Logs out the user and clears stored credentials.
