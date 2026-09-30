@@ -8,6 +8,7 @@ import '../../models/listing_model.dart';
 import '../inquiries/send_inquiry_screen.dart';
 import 'vendor_details_screen.dart';
 import '../../features/venue/widgets/listing_category_details.dart';
+import '../../features/venue/widgets/full_screen_image_viewer.dart';
 import '../../core/api_service.dart';
 
 /// Detailed view for a specific business service / package added by a vendor.
@@ -27,9 +28,10 @@ class ListingDetailsScreen extends StatefulWidget {
 
 class _ListingDetailsScreenState extends State<ListingDetailsScreen>
     with SingleTickerProviderStateMixin {
-  late bool _isFavorite;
   late final AnimationController _heartCtrl;
   late final Animation<double> _heartScale;
+  late final PageController _imagePageCtrl;
+  int _currentImageIndex = 0;
   
   late Listing _listing;
   bool _isLoadingDetails = true;
@@ -38,7 +40,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
   void initState() {
     super.initState();
     _listing = widget.listing;
-    _isFavorite = _listing.isFavorite;
+    _imagePageCtrl = PageController();
 
     _fetchDetails();
 
@@ -76,21 +78,41 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
   @override
   void dispose() {
     _heartCtrl.dispose();
+    _imagePageCtrl.dispose();
     super.dispose();
+  }
+
+  List<String> _getGalleryImages(Listing listing) {
+    final List<String> resolved = [];
+    if (listing.coverImageUrl.isNotEmpty) {
+      resolved.add(Listing.resolveImageUrl(listing.coverImageUrl));
+    }
+    for (final img in listing.images) {
+      if (img.isNotEmpty) {
+        resolved.add(Listing.resolveImageUrl(img));
+      }
+    }
+    // Dedupe the combined list (cover + images) AFTER resolving
+    final uniqueList = <String>[];
+    final seen = <String>{};
+    for (final url in resolved) {
+      final trimmed = url.trim();
+      if (trimmed.isNotEmpty && seen.add(trimmed)) {
+        uniqueList.add(trimmed);
+      }
+    }
+    return uniqueList;
   }
 
   void _toggleHeart() {
     requireLogin(
       context,
-      reason: 'Sign in to save ${widget.listing.title} to your favourites',
+      reason: 'Sign in to save ${_listing.title} to your favourites',
       icon: Icons.favorite_border_rounded,
       onSuccess: () async {
         _heartCtrl.forward(from: 0);
         try {
-          final newState = await context.read<FavoritesProvider>().toggleFavorite(widget.listing);
-          if (mounted) {
-            setState(() => _isFavorite = newState);
-          }
+          await context.read<FavoritesProvider>().toggleFavorite(_listing);
           widget.onFavoriteToggled?.call();
         } catch (e) {
           if (mounted) {
@@ -110,6 +132,9 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
     final screenH = MediaQuery.of(context).size.height;
     final imageH = screenH * 0.38;
     final bottomPad = MediaQuery.of(context).padding.bottom;
+    final favoritesProvider = context.watch<FavoritesProvider>();
+    final isFavorite = favoritesProvider.isFavorite(listing.serviceId);
+    final galleryImages = _getGalleryImages(listing);
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -121,36 +146,58 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Hero / Gallery Image ─────────────────────────────
+                // ── Hero / Image Carousel ────────────────────────────
                 Stack(
                   children: [
                     SizedBox(
                       height: imageH,
                       width: double.infinity,
-                      child: Image.network(
-                        listing.coverImageUrl,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          color: Colors.grey.shade200,
-                          child: const Center(
-                            child: Icon(Icons.image_not_supported_outlined,
-                                size: 48, color: Colors.grey),
-                          ),
-                        ),
-                      ),
+                      child: galleryImages.isEmpty
+                          ? _buildImagePlaceholder()
+                          : PageView.builder(
+                              controller: _imagePageCtrl,
+                              itemCount: galleryImages.length,
+                              onPageChanged: (index) {
+                                setState(() => _currentImageIndex = index);
+                              },
+                              itemBuilder: (context, index) {
+                                final url = galleryImages[index];
+                                return GestureDetector(
+                                  onTap: () {
+                                    Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => FullScreenImageViewer(
+                                          imageUrls: galleryImages,
+                                          initialIndex: index,
+                                          title: listing.title,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Image.network(
+                                    url,
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (context, error, stackTrace) =>
+                                        _buildImagePlaceholder(),
+                                  ),
+                                );
+                              },
+                            ),
                     ),
                     Positioned.fill(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [
-                              Colors.black.withValues(alpha: 0.4),
-                              Colors.transparent,
-                              Colors.black.withValues(alpha: 0.6),
-                            ],
-                            stops: const [0.0, 0.5, 1.0],
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withValues(alpha: 0.4),
+                                Colors.transparent,
+                                Colors.black.withValues(alpha: 0.6),
+                              ],
+                              stops: const [0.0, 0.5, 1.0],
+                            ),
                           ),
                         ),
                       ),
@@ -176,28 +223,57 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                         ),
                       ),
                     ),
+                    // Carousel Page Indicator Badge
+                    if (galleryImages.length > 1)
+                      Positioned(
+                        bottom: 16,
+                        right: 20,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.white24, width: 0.5),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.photo_library_outlined, size: 13, color: Colors.white),
+                              const SizedBox(width: 5),
+                              Text(
+                                '${_currentImageIndex + 1}/${galleryImages.length}',
+                                style: GoogleFonts.poppins(
+                                  color: Colors.white,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                   ],
                 ),
 
                 // ── Service Details Content ──────────────────────────
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 20, 20, 120),
+                  padding: EdgeInsets.fromLTRB(20, 20, 20, bottomPad + 100),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Title
+                      // Title (balanced sizing to prevent overflow)
                       Text(
                         listing.title,
                         style: GoogleFonts.playfairDisplay(
-                          fontSize: 26,
+                          fontSize: 22,
                           fontWeight: FontWeight.w700,
                           color: OleenaTheme.textDark,
-                          height: 1.25,
+                          height: 1.3,
                         ),
                       ),
                       const SizedBox(height: 10),
 
-                      // Price Row
+                      // Price Row & Rating
                       Row(
                         children: [
                           Container(
@@ -239,142 +315,6 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                             ],
                           ),
                         ],
-                      ),
-                      const SizedBox(height: 24),
-
-                      // ── Vendor Profile Card ────────────────────────
-                      Material(
-                        color: const Color(0xFFF9FAFB),
-                        borderRadius: BorderRadius.circular(18),
-                        child: InkWell(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => VendorDetailsScreen(vendor: vendor.toVendor()),
-                              ),
-                            );
-                          },
-                          borderRadius: BorderRadius.circular(18),
-                          child: Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: Colors.grey.shade200),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    // Vendor Logo / Avatar
-                                    Container(
-                                      width: 48,
-                                      height: 48,
-                                      decoration: BoxDecoration(
-                                        color: OleenaTheme.primaryTint,
-                                        shape: BoxShape.circle,
-                                        border: Border.all(color: Colors.white, width: 2),
-                                      ),
-                                      clipBehavior: Clip.antiAlias,
-                                      child: vendor.logoUrl != null && vendor.logoUrl!.isNotEmpty
-                                          ? Image.network(
-                                              vendor.logoUrl!,
-                                              fit: BoxFit.cover,
-                                              errorBuilder: (context, error, stackTrace) => const Icon(
-                                                Icons.storefront_rounded,
-                                                color: OleenaTheme.primary,
-                                              ),
-                                            )
-                                          : const Icon(
-                                              Icons.storefront_rounded,
-                                              color: OleenaTheme.primary,
-                                            ),
-                                    ),
-                                    const SizedBox(width: 12),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Row(
-                                            children: [
-                                              Flexible(
-                                                child: Text(
-                                                  vendor.name,
-                                                  style: GoogleFonts.poppins(
-                                                    fontSize: 15,
-                                                    fontWeight: FontWeight.w700,
-                                                    color: OleenaTheme.textDark,
-                                                  ),
-                                                  maxLines: 1,
-                                                  overflow: TextOverflow.ellipsis,
-                                                ),
-                                              ),
-                                              if (vendor.isApproved) ...[
-                                                const SizedBox(width: 4),
-                                                const Icon(
-                                                  Icons.verified_rounded,
-                                                  size: 16,
-                                                  color: OleenaTheme.primary,
-                                                ),
-                                              ],
-                                            ],
-                                          ),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            vendor.location,
-                                            style: GoogleFonts.poppins(
-                                              fontSize: 12,
-                                              color: OleenaTheme.textMuted,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    const Icon(
-                                      Icons.chevron_right_rounded,
-                                      color: OleenaTheme.primary,
-                                      size: 20,
-                                    ),
-                                  ],
-                                ),
-                                if (vendor.ownerName != null && vendor.ownerName!.isNotEmpty) ...[
-                                  const Divider(height: 20),
-                                  Row(
-                                    children: [
-                                      Icon(Icons.person_outline_rounded,
-                                          size: 14, color: Colors.grey.shade600),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        'Managed by: ${vendor.ownerName}',
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                                if (vendor.contactNumber != null && vendor.contactNumber!.isNotEmpty) ...[
-                                  const SizedBox(height: 6),
-                                  Row(
-                                    children: [
-                                      Icon(Icons.phone_outlined,
-                                          size: 14, color: Colors.grey.shade600),
-                                      const SizedBox(width: 6),
-                                      Text(
-                                        vendor.contactNumber!,
-                                        style: GoogleFonts.poppins(
-                                          fontSize: 12,
-                                          color: Colors.grey.shade700,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
-                        ),
                       ),
                       const SizedBox(height: 24),
 
@@ -428,6 +368,12 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                       _buildHighlight(Icons.chat_bubble_outline, 'Direct Inquiry & Fast Response'),
                       _buildHighlight(Icons.event_available_outlined, 'Customizable Packages Available'),
                       _buildHighlight(Icons.thumb_up_alt_outlined, 'Dedicated Support & Assistance'),
+                      const SizedBox(height: 24),
+
+                      // TODO(Vinu): credentials/trust section goes here.
+
+                      // ── Vendor Profile Card (Moved to the end) ───────
+                      _buildVendorCard(context, vendor),
                     ],
                   ),
                 ),
@@ -435,7 +381,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
             ),
           ),
 
-          // ── Top Navigation (Back & Share) ──────────────────────────
+          // ── Top Navigation (Back & Heart) ──────────────────────────
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
             left: 16,
@@ -450,8 +396,8 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                 ScaleTransition(
                   scale: _heartScale,
                   child: _RoundButton(
-                    icon: _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    iconColor: _isFavorite ? Colors.red : OleenaTheme.textDark,
+                    icon: isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    iconColor: isFavorite ? Colors.red : OleenaTheme.textDark,
                     onTap: _toggleHeart,
                   ),
                 ),
@@ -537,6 +483,161 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildImagePlaceholder() {
+    return Container(
+      color: Colors.grey.shade200,
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.image_not_supported_outlined, size: 48, color: Colors.grey.shade400),
+            const SizedBox(height: 8),
+            Text(
+              'Image unavailable',
+              style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade500),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVendorCard(BuildContext context, dynamic vendor) {
+    return Material(
+      color: const Color(0xFFF9FAFB),
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => VendorDetailsScreen(vendor: vendor.toVendor()),
+            ),
+          );
+        },
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: Colors.grey.shade200),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  // Vendor Logo / Avatar
+                  Container(
+                    width: 48,
+                    height: 48,
+                    decoration: BoxDecoration(
+                      color: OleenaTheme.primaryTint,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    clipBehavior: Clip.antiAlias,
+                    child: vendor.logoUrl != null && vendor.logoUrl!.isNotEmpty
+                        ? Image.network(
+                            vendor.logoUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => const Icon(
+                              Icons.storefront_rounded,
+                              color: OleenaTheme.primary,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.storefront_rounded,
+                            color: OleenaTheme.primary,
+                          ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Flexible(
+                              child: Text(
+                                vendor.name,
+                                style: GoogleFonts.poppins(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: OleenaTheme.textDark,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            if (vendor.isApproved) ...[
+                              const SizedBox(width: 4),
+                              const Icon(
+                                Icons.verified_rounded,
+                                size: 16,
+                                color: OleenaTheme.primary,
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          vendor.location,
+                          style: GoogleFonts.poppins(
+                            fontSize: 12,
+                            color: OleenaTheme.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: OleenaTheme.primary,
+                    size: 20,
+                  ),
+                ],
+              ),
+              if (vendor.ownerName != null && vendor.ownerName!.isNotEmpty) ...[
+                const Divider(height: 20),
+                Row(
+                  children: [
+                    Icon(Icons.person_outline_rounded,
+                        size: 14, color: Colors.grey.shade600),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Managed by: ${vendor.ownerName}',
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+              if (vendor.contactNumber != null && vendor.contactNumber!.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Row(
+                  children: [
+                    Icon(Icons.phone_outlined,
+                        size: 14, color: Colors.grey.shade600),
+                    const SizedBox(width: 6),
+                    Text(
+                      vendor.contactNumber!,
+                      style: GoogleFonts.poppins(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }

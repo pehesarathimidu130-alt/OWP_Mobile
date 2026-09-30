@@ -6,11 +6,9 @@ import '../../core/auth_provider.dart';
 import '../../core/favorites_provider.dart';
 import '../../core/theme.dart';
 import '../../features/profile/providers/customer_profile_provider.dart';
-import '../../features/profile/providers/notification_preferences_provider.dart';
 import '../../features/profile/widgets/change_password_dialog.dart';
 import '../../features/profile/widgets/edit_profile_sheet.dart';
 import '../../features/profile/widgets/notification_preferences_card.dart';
-import '../../features/profile/widgets/profile_photo_sheet.dart';
 
 /// Customer Profile Screen displaying account details, statistics, and profile management actions.
 ///
@@ -34,7 +32,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   void _loadProfile() {
     final authProvider = context.read<AuthProvider>();
     if (authProvider.isAuthenticated) {
-      context.read<CustomerProfileProvider>().fetchProfile(authFallback: authProvider);
+      context.read<CustomerProfileProvider>().fetchProfile();
     }
   }
 
@@ -43,8 +41,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final authProvider = context.watch<AuthProvider>();
     final profileProvider = context.watch<CustomerProfileProvider>();
     final favoritesProvider = context.watch<FavoritesProvider>();
-    // Watch notification prefs so the card re-renders on toggle
-    context.watch<NotificationPreferencesProvider>();
 
     final isAuthenticated = authProvider.isAuthenticated;
     final profile = profileProvider.profile;
@@ -79,7 +75,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           color: OleenaTheme.primary,
           onRefresh: () async {
             if (isAuthenticated) {
-              await context.read<CustomerProfileProvider>().fetchProfile(authFallback: authProvider);
+              await context.read<CustomerProfileProvider>().fetchProfile();
             }
           },
           child: SingleChildScrollView(
@@ -251,10 +247,21 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: Row(
         children: [
-          // Avatar — tappable to open ProfilePhotoSheet
+          // Avatar monogram initials display — tappable to show "Photo upload coming soon"
           GestureDetector(
             onTap: isAuthenticated
-                ? () => ProfilePhotoSheet.show(context)
+                ? () {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Photo upload coming soon',
+                          style: GoogleFonts.poppins(fontSize: 13),
+                        ),
+                        behavior: SnackBarBehavior.floating,
+                        backgroundColor: OleenaTheme.textDark,
+                      ),
+                    );
+                  }
                 : null,
             child: Stack(
               children: [

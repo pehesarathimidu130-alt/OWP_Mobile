@@ -62,7 +62,7 @@ class Listing {
         )}';
   }
 
-  static String _resolveImageUrl(String? rawUrl) {
+  static String resolveImageUrl(String? rawUrl) {
     if (rawUrl == null || rawUrl.trim().isEmpty) {
       return 'https://images.unsplash.com/photo-1519741497674-611481863552?auto=format&fit=crop&w=800&q=80';
     }
@@ -74,6 +74,8 @@ class Listing {
     final path = trimmed.startsWith('/') ? trimmed : '/$trimmed';
     return '$base$path';
   }
+
+  static String _resolveImageUrl(String? rawUrl) => resolveImageUrl(rawUrl);
 
   static String _resolveCategoryIcon(String? category) {
     if (category == null || category.isEmpty) return 'sparkles';
