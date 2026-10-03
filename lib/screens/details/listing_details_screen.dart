@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../../core/auth_gate.dart';
+import '../../core/api_service.dart';
+import '../../core/auth_provider.dart';
 import '../../core/favorites_provider.dart';
 import '../../core/theme.dart';
 import '../../models/listing_model.dart';
+import '../../widgets/ensure_logged_in.dart';
+import '../../widgets/masked_contact.dart';
 import '../inquiries/send_inquiry_screen.dart';
 import 'vendor_details_screen.dart';
 import '../../features/venue/widgets/listing_category_details.dart';
 import '../../features/venue/widgets/full_screen_image_viewer.dart';
-import '../../core/api_service.dart';
 
 /// Detailed view for a specific business service / package added by a vendor.
 class ListingDetailsScreen extends StatefulWidget {
@@ -35,6 +37,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
   
   late Listing _listing;
   bool _isLoadingDetails = true;
+  bool _wasAuthenticated = false;
 
   @override
   void initState() {
@@ -57,7 +60,23 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
     ));
   }
 
-  Future<void> _fetchDetails() async {
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isAuth =
+        Provider.of<AuthProvider?>(context, listen: true)?.isAuthenticated ?? false;
+    if (isAuth && !_wasAuthenticated) {
+      _wasAuthenticated = true;
+      _fetchDetails(silent: true);
+    } else if (!isAuth) {
+      _wasAuthenticated = false;
+    }
+  }
+
+  Future<void> _fetchDetails({bool silent = false}) async {
+    if (!silent) {
+      setState(() => _isLoadingDetails = true);
+    }
     try {
       final detailedListing = await ApiService().fetchListingById(_listing.serviceId);
       if (mounted) {
@@ -104,25 +123,27 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
     return uniqueList;
   }
 
-  void _toggleHeart() {
-    requireLogin(
+  void _toggleHeart() async {
+    final ok = await ensureLoggedIn(
       context,
-      reason: 'Sign in to save ${_listing.title} to your favourites',
-      icon: Icons.favorite_border_rounded,
-      onSuccess: () async {
-        _heartCtrl.forward(from: 0);
-        try {
-          await context.read<FavoritesProvider>().toggleFavorite(_listing);
-          widget.onFavoriteToggled?.call();
-        } catch (e) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Could not update favourite: $e')),
-            );
-          }
-        }
-      },
+      message: 'You need to register or log in to save favourites.',
     );
+    if (!ok || !mounted) return;
+
+    _fetchDetails(silent: true);
+    _heartCtrl.forward(from: 0);
+    try {
+      await context.read<FavoritesProvider>().toggleFavorite(_listing);
+      if (!mounted) return;
+      await context.read<FavoritesProvider>().fetchFavorites();
+      widget.onFavoriteToggled?.call();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update favourite: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -135,6 +156,8 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
     final favoritesProvider = context.watch<FavoritesProvider>();
     final isFavorite = favoritesProvider.isFavorite(listing.serviceId);
     final galleryImages = _getGalleryImages(listing);
+    final screenW = MediaQuery.of(context).size.width;
+    final titleFontSize = screenW < 360 ? 20.0 : 22.0;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -174,11 +197,14 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                                       ),
                                     );
                                   },
-                                  child: Image.network(
-                                    url,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) =>
-                                        _buildImagePlaceholder(),
+                                  child: Hero(
+                                    tag: 'gallery_hero_${url}_$index',
+                                    child: Image.network(
+                                      url,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) =>
+                                          _buildImagePlaceholder(),
+                                    ),
                                   ),
                                 );
                               },
@@ -261,11 +287,12 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Title (balanced sizing to prevent overflow)
+                      // Title: Playfair Display, responsive size, maxLines 3, no ellipsis
                       Text(
                         listing.title,
+                        maxLines: 3,
                         style: GoogleFonts.playfairDisplay(
-                          fontSize: 22,
+                          fontSize: titleFontSize,
                           fontWeight: FontWeight.w700,
                           color: OleenaTheme.textDark,
                           height: 1.3,
@@ -456,16 +483,20 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
 
                   // Send Inquiry CTA Button
                   ElevatedButton.icon(
-                    onPressed: () => requireLogin(
-                      context,
-                      reason: 'Sign in to send an inquiry for "${listing.title}"',
-                      icon: Icons.chat_bubble_outline_rounded,
-                      onSuccess: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => SendInquiryScreen(listing: listing),
-                        ),
-                      ),
-                    ),
+                    onPressed: () async {
+                      final ok = await ensureLoggedIn(
+                        context,
+                        message: 'You need to register or log in to send an inquiry.',
+                      );
+                      if (ok && context.mounted) {
+                        _fetchDetails(silent: true);
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => SendInquiryScreen(listing: _listing),
+                          ),
+                        );
+                      }
+                    },
                     icon: const Icon(Icons.send_rounded, size: 16),
                     label: const Text('Send Inquiry'),
                     style: ElevatedButton.styleFrom(
@@ -608,28 +639,38 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                     Icon(Icons.person_outline_rounded,
                         size: 14, color: Colors.grey.shade600),
                     const SizedBox(width: 6),
-                    Text(
-                      'Managed by: ${vendor.ownerName}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.grey.shade700,
+                    Expanded(
+                      child: Text(
+                        'Managed by: ${vendor.ownerName}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
                       ),
                     ),
                   ],
                 ),
               ],
-              if (vendor.contactNumber != null && vendor.contactNumber!.isNotEmpty) ...[
+              if (vendor.contactNumber != null ||
+                  !(Provider.of<AuthProvider?>(context, listen: true)?.isAuthenticated ?? false) ||
+                  vendor.contactHidden ||
+                  _listing.contactHidden) ...[
                 const SizedBox(height: 6),
                 Row(
                   children: [
                     Icon(Icons.phone_outlined,
                         size: 14, color: Colors.grey.shade600),
                     const SizedBox(width: 6),
-                    Text(
-                      vendor.contactNumber!,
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.grey.shade700,
+                    Expanded(
+                      child: MaskedContact(
+                        value: vendor.contactNumber,
+                        contactHidden: vendor.contactHidden || _listing.contactHidden,
+                        message: 'You need to register or log in to view this.',
+                        onAuthSuccess: () => _fetchDetails(silent: true),
+                        style: GoogleFonts.poppins(
+                          fontSize: 12,
+                          color: Colors.grey.shade700,
+                        ),
                       ),
                     ),
                   ],
@@ -656,12 +697,14 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
             child: Icon(icon, size: 16, color: OleenaTheme.primary),
           ),
           const SizedBox(width: 12),
-          Text(
-            label,
-            style: GoogleFonts.poppins(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Colors.grey.shade800,
+          Expanded(
+            child: Text(
+              label,
+              style: GoogleFonts.poppins(
+                fontSize: 13,
+                fontWeight: FontWeight.w500,
+                color: Colors.grey.shade800,
+              ),
             ),
           ),
         ],

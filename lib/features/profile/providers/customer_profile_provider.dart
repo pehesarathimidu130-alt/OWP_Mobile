@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/api_client.dart';
 import '../../../models/customer_profile_model.dart';
 
@@ -60,13 +61,6 @@ class CustomerProfileProvider extends ChangeNotifier {
 
       if (response != null && response is Map<String, dynamic>) {
         _profile = CustomerProfile.fromJson(response);
-      } else if (_profile != null) {
-        _profile = _profile!.copyWith(
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          fullName: '$firstName $lastName'.trim(),
-          phoneNumber: phoneNumber?.trim(),
-        );
       }
     } finally {
       _isLoading = false;
@@ -90,6 +84,35 @@ class CustomerProfileProvider extends ChangeNotifier {
           'newPassword': newPassword,
         },
       );
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Uploads a customer profile photo via multipart/form-data.
+  Future<void> uploadProfilePhoto(XFile file) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _apiClient.postMultipart(
+        '/customer/profile/photo',
+        file: file,
+        fileFieldName: 'file',
+      );
+
+      if (response != null && response is Map<String, dynamic>) {
+        final photoUrl = response['profilePhotoUrl']?.toString() ?? response['photoUrl']?.toString();
+        if (photoUrl != null && _profile != null) {
+          _profile = _profile!.copyWith(profilePhotoUrl: photoUrl);
+        } else {
+          await fetchProfile();
+        }
+      } else {
+        await fetchProfile();
+      }
     } finally {
       _isLoading = false;
       notifyListeners();

@@ -23,6 +23,7 @@ class Listing {
   final Map<String, dynamic>? decorationsDetails;
   final Map<String, dynamic>? cateringDetails;
   final List<Map<String, dynamic>>? venueSpaces;
+  final bool contactHidden;
   bool isFavorite;
 
   Listing({
@@ -46,6 +47,7 @@ class Listing {
     this.decorationsDetails,
     this.cateringDetails,
     this.venueSpaces,
+    this.contactHidden = false,
     this.isFavorite = false,
   });
 
@@ -165,6 +167,7 @@ class Listing {
       decorationsDetails: json['decorationsDetails'] as Map<String, dynamic>?,
       cateringDetails: json['cateringDetails'] as Map<String, dynamic>?,
       venueSpaces: parsedVenueSpaces,
+      contactHidden: json['contactHidden'] == true || rawVendor['contactHidden'] == true,
       isFavorite: json['isFavorite'] == true,
     );
   }
@@ -190,6 +193,7 @@ class Listing {
     Map<String, dynamic>? decorationsDetails,
     Map<String, dynamic>? cateringDetails,
     List<Map<String, dynamic>>? venueSpaces,
+    bool? contactHidden,
     bool? isFavorite,
   }) {
     return Listing(
@@ -213,6 +217,7 @@ class Listing {
       decorationsDetails: decorationsDetails ?? this.decorationsDetails,
       cateringDetails: cateringDetails ?? this.cateringDetails,
       venueSpaces: venueSpaces ?? this.venueSpaces,
+      contactHidden: contactHidden ?? this.contactHidden,
       isFavorite: isFavorite ?? this.isFavorite,
     );
   }
@@ -235,6 +240,7 @@ class VendorInfo {
   final int reviewCount;
   final int yearsInBusiness;
   final bool isApproved;
+  final bool contactHidden;
 
   VendorInfo({
     required this.id,
@@ -252,6 +258,7 @@ class VendorInfo {
     this.reviewCount = 18,
     this.yearsInBusiness = 3,
     this.isApproved = true,
+    this.contactHidden = false,
   });
 
   factory VendorInfo.fromJson(Map<String, dynamic> json) {
@@ -301,6 +308,7 @@ class VendorInfo {
       reviewCount: parsedReviewCount,
       yearsInBusiness: parsedYears,
       isApproved: json['isApproved'] != false,
+      contactHidden: json['contactHidden'] == true,
     );
   }
 

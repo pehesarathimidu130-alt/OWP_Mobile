@@ -46,7 +46,11 @@ class Inquiry {
   String get formattedWeddingDate {
     if (weddingDate == null) return 'Flexible';
     final d = weddingDate!;
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
   }
 
   String get formattedCreatedDate {

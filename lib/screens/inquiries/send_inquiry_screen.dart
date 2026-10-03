@@ -2,8 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:provider/provider.dart';
 import '../../core/api_service.dart';
+import '../../core/auth_provider.dart';
 import '../../core/theme.dart';
+import '../../features/profile/providers/customer_profile_provider.dart';
 import '../../models/listing_model.dart';
 import '../../models/vendor_model.dart';
 
@@ -184,7 +187,7 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
         source: source,
         maxWidth: 1600,
         maxHeight: 1600,
-        imageQuality: 85,
+        imageQuality: 80,
       );
       if (picked != null) {
         final bytes = await picked.readAsBytes();
@@ -290,6 +293,11 @@ class _SendInquiryScreenState extends State<SendInquiryScreen> {
       );
 
       if (!mounted) return;
+
+      final authProvider = context.read<AuthProvider>();
+      if (authProvider.isAuthenticated) {
+        context.read<CustomerProfileProvider>().fetchProfile();
+      }
 
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

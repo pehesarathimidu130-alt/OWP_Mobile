@@ -1,18 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../../core/theme.dart';
+import '../providers/notification_preferences_provider.dart';
 
-/// Card widget displaying notification preference options.
+/// Card widget displaying customer notification preference options.
 ///
-/// Note: Backend currently lacks customer notification preference endpoints.
-/// In accordance with platform integrity rules, unsupported features (Weekly Digest &
-/// Promotions) have been removed, and remaining toggles are displayed in a disabled
-/// state with a 'Coming soon' indicator rather than faking local-only persistence.
+/// Connected to [NotificationPreferencesProvider] with optimistic toggle updates
+/// and backend persistence.
 class NotificationPreferencesCard extends StatelessWidget {
   const NotificationPreferencesCard({super.key});
 
   @override
   Widget build(BuildContext context) {
+    final prefs = Provider.of<NotificationPreferencesProvider?>(context, listen: true);
+    final inquiryUpdates = prefs?.inquiryUpdates ?? true;
+    final priceChanges = prefs?.priceChanges ?? true;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -29,7 +33,7 @@ class NotificationPreferencesCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Section header with 'Coming soon' pill
+          // Section header
           Row(
             children: [
               Container(
@@ -55,37 +59,53 @@ class NotificationPreferencesCard extends StatelessWidget {
                   ),
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF3F4F6),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: Text(
-                  'Coming soon',
-                  style: GoogleFonts.poppins(
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    color: OleenaTheme.textMuted,
-                  ),
-                ),
-              ),
             ],
           ),
 
           const SizedBox(height: 14),
 
-          const _DisabledNotifRow(
+          _PreferenceRow(
             icon: Icons.chat_bubble_outline_rounded,
             title: 'Inquiry Updates',
             subtitle: 'Status changes on your inquiries',
+            value: inquiryUpdates,
+            onChanged: (val) async {
+              if (prefs == null) return;
+              try {
+                await prefs.toggleInquiryUpdates(val);
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to update inquiry notification preference.'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
+            },
           ),
           const Divider(height: 1, thickness: 0.6),
-          const _DisabledNotifRow(
+          _PreferenceRow(
             icon: Icons.favorite_border_rounded,
             title: 'Favourite Price Changes',
             subtitle: 'Alerts when saved services change prices',
+            value: priceChanges,
+            onChanged: (val) async {
+              if (prefs == null) return;
+              try {
+                await prefs.togglePriceChanges(val);
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to update price change notification preference.'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
+            },
           ),
         ],
       ),
@@ -93,16 +113,20 @@ class NotificationPreferencesCard extends StatelessWidget {
   }
 }
 
-/// Single disabled row item inside [NotificationPreferencesCard].
-class _DisabledNotifRow extends StatelessWidget {
+/// Single interactive toggle row inside [NotificationPreferencesCard].
+class _PreferenceRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
+  final bool value;
+  final ValueChanged<bool>? onChanged;
 
-  const _DisabledNotifRow({
+  const _PreferenceRow({
     required this.icon,
     required this.title,
     required this.subtitle,
+    required this.value,
+    required this.onChanged,
   });
 
   @override
@@ -111,7 +135,7 @@ class _DisabledNotifRow extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Colors.grey.shade400),
+          Icon(icon, size: 18, color: OleenaTheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -122,28 +146,26 @@ class _DisabledNotifRow extends StatelessWidget {
                   style: GoogleFonts.poppins(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade700,
+                    color: OleenaTheme.textDark,
                   ),
                 ),
                 Text(
                   subtitle,
                   style: GoogleFonts.poppins(
                     fontSize: 11,
-                    color: Colors.grey.shade400,
+                    color: OleenaTheme.textMuted,
                   ),
                 ),
               ],
             ),
           ),
           Switch.adaptive(
-            value: false,
-            onChanged: null,
-            inactiveTrackColor: Colors.grey.shade200,
-            inactiveThumbColor: Colors.grey.shade400,
+            value: value,
+            activeColor: OleenaTheme.primary,
+            onChanged: onChanged,
           ),
         ],
       ),
     );
   }
 }
-

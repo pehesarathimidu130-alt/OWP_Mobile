@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_client.dart';
 import 'session_events.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 /// Provider managing authentication state, customer profile data, and JWT tokens.
 class AuthProvider extends ChangeNotifier {
@@ -102,6 +103,49 @@ class AuthProvider extends ChangeNotifier {
       if (response != null && response is Map<String, dynamic>) {
         await _handleAuthSuccess(response, fallbackEmail: email);
       }
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Initiates Google Sign-In and authenticates with the backend.
+  Future<void> signInWithGoogle(String serverClientId) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final googleSignIn = GoogleSignIn(serverClientId: serverClientId);
+      final GoogleSignInAccount? account = await googleSignIn.signIn();
+
+      if (account == null) {
+        // User canceled the sign-in flow.
+        throw Exception('CANCELED');
+      }
+
+      final GoogleSignInAuthentication auth = await account.authentication;
+      final String? idToken = auth.idToken;
+
+      if (idToken == null) {
+        throw Exception('Failed to obtain Google ID token.');
+      }
+
+      final response = await _apiClient.post('/auth/customer/google-login', body: {
+        'idToken': idToken,
+      });
+
+      if (response != null && response is Map<String, dynamic>) {
+        await _handleAuthSuccess(response, fallbackEmail: account.email, fallbackName: account.displayName);
+      }
+    } catch (e) {
+      if (e.toString().contains('CANCELED')) {
+        rethrow;
+      }
+      if (e is ApiException) {
+        rethrow; // pass backend errors (like different account type) directly
+      }
+      // Re-throw generic or PlatformException errors for UI to handle
+      throw Exception(e.toString());
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -228,6 +272,11 @@ class AuthProvider extends ChangeNotifier {
     await _storage.delete(key: 'user_full_name');
     await _storage.delete(key: 'user_email');
     await _storage.delete(key: 'user_role');
+
+    try {
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+    } catch (_) {}
 
     _token = null;
     _fullName = null;
