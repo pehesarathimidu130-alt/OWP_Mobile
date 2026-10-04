@@ -156,6 +156,7 @@ class PublicVendorProfile {
   final List<String> galleryImages;
   final List<VendorPerformanceItem> performances;
   final List<PublicVendorServiceItem> services;
+  final bool contactHidden;
 
   const PublicVendorProfile({
     required this.vendorId,
@@ -174,6 +175,7 @@ class PublicVendorProfile {
     this.travelPolicy,
     this.yearsInBusiness,
     this.isApproved = false,
+    this.contactHidden = false,
     this.logoUrl,
     this.coverImageUrl,
     this.reviewCount = 0,
@@ -245,6 +247,7 @@ class PublicVendorProfile {
           ? (json['yearsInBusiness'] as num).toInt()
           : int.tryParse('${json['yearsInBusiness'] ?? ''}'),
       isApproved: json['isApproved'] == true,
+      contactHidden: json['contactHidden'] == true,
       logoUrl: resolveMediaUrl(json['logoUrl']?.toString()),
       coverImageUrl: resolveMediaUrl(json['coverImageUrl']?.toString()),
       reviewCount: json['reviewCount'] is num

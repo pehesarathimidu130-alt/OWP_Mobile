@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/api_client.dart';
+import '../../../core/app_config.dart';
+import '../../../core/auth_coordinator.dart';
 import '../../../core/auth_provider.dart';
 import '../../../core/theme.dart';
 import '../../../widgets/app_text_field.dart';
+import 'login_screen.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({super.key});
@@ -27,12 +30,19 @@ class _RegisterScreenState extends State<RegisterScreen> {
   AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
 
   @override
+  void initState() {
+    super.initState();
+    AuthCoordinator.screenMounted();
+  }
+
+  @override
   void dispose() {
     _nameController.dispose();
     _emailController.dispose();
     _phoneController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    AuthCoordinator.screenUnmounted();
     super.dispose();
   }
 
@@ -117,24 +127,25 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
       if (!mounted) return;
 
+      // Auto-login fallback if registration payload did not authenticate immediately
+      if (!context.read<AuthProvider>().isAuthenticated) {
+        await context.read<AuthProvider>().login(
+              _emailController.text.trim(),
+              _passwordController.text,
+            );
+      }
+
+      if (!mounted) return;
+
+      AuthCoordinator.notifySuccess(context);
+    } on UnimplementedError {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Row(
-            children: [
-              Icon(Icons.check_circle_outline, color: Colors.white),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text('Account created successfully! Welcome to Oleena.'),
-              ),
-            ],
-          ),
-          backgroundColor: Colors.green.shade700,
+        const SnackBar(
+          content: Text("Registration isn't connected to the backend yet."),
           behavior: SnackBarBehavior.floating,
         ),
       );
-
-      // Redirect to home screen on success (200/201)
-      context.go('/home');
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -167,6 +178,55 @@ class _RegisterScreenState extends State<RegisterScreen> {
           content: Text('Registration failed: $e'),
           backgroundColor: Colors.red.shade700,
           behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await context.read<AuthProvider>().signInWithGoogle(AppConfig.googleWebClientId);
+      
+      if (!mounted) return;
+      AuthCoordinator.notifySuccess(context);
+    } catch (e) {
+      if (!mounted) return;
+      if (e.toString().contains('CANCELED')) return;
+      
+      String errorMessage;
+      bool showRetry = false;
+      
+      if (e is ApiException) {
+        errorMessage = e.message;
+      } else if (e.toString().contains('ApiException: 10') || e.toString().contains('sign_in_failed')) {
+        errorMessage = 'Google sign-in is not set up for this build.';
+      } else {
+        errorMessage = 'Network error or Google Sign-In failed.';
+        showRetry = true;
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          action: showRetry
+              ? SnackBarAction(
+                  label: 'Retry',
+                  textColor: Colors.white,
+                  onPressed: _handleGoogleSignIn,
+                )
+              : null,
         ),
       );
     } finally {
@@ -462,9 +522,47 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
                         const SizedBox(height: 18),
 
+                        // Google Sign-In Button
+                        SizedBox(
+                          height: 52,
+                          child: OutlinedButton(
+                            onPressed: _isSubmitting ? null : _handleGoogleSignIn,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: OleenaTheme.textDark,
+                              side: const BorderSide(color: OleenaTheme.borderSubtle, width: 1.5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: OleenaTheme.buttonBorderRadius,
+                              ),
+                            ),
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      color: OleenaTheme.primary,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Continue with Google',
+                                        style: OleenaTheme.body.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
                         // Login Navigation Link
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
                               'Already have an account? ',
@@ -473,7 +571,18 @@ class _RegisterScreenState extends State<RegisterScreen> {
                               ),
                             ),
                             GestureDetector(
-                              onTap: () => context.go('/login'),
+                              onTap: () {
+                                if (AuthCoordinator.isFlowActive) {
+                                  Navigator.of(context).pushReplacement(
+                                    MaterialPageRoute(
+                                      settings: const RouteSettings(name: 'auth_login'),
+                                      builder: (_) => const LoginScreen(),
+                                    ),
+                                  );
+                                } else {
+                                  context.go('/login');
+                                }
+                              },
                               child: Text(
                                 'Login',
                                 style: OleenaTheme.body.copyWith(

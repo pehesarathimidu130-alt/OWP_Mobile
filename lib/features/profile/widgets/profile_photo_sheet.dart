@@ -2,29 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../../../core/theme.dart';
 
-/// Bottom sheet for selecting a profile photo source (Camera / Gallery / Remove).
-///
-/// NOTE: Full image upload requires the `image_picker` package (not yet in
-/// pubspec.yaml). This widget currently shows the selection UI and a placeholder
-/// snackbar. Once the backend owner exposes `PUT /customer/profile/photo`
-/// and the team agrees to add `image_picker`, replace the TODO bodies with
-/// real pick + upload logic.
-///
-/// Required endpoint (flag to backend owner):
-///   PUT /api/customer/profile/photo
-///   Auth: Bearer
-///   Body: multipart/form-data  `{ photo: file }`
-///   Response: { photoUrl: string }
+import 'package:image_picker/image_picker.dart';
+
+/// Bottom sheet for selecting a profile photo source (Camera / Gallery).
 class ProfilePhotoSheet extends StatelessWidget {
-  final VoidCallback? onRemovePhoto;
+  final ValueChanged<XFile>? onPhotoSelected;
 
-  const ProfilePhotoSheet({super.key, this.onRemovePhoto});
+  const ProfilePhotoSheet({super.key, this.onPhotoSelected});
 
-  static Future<void> show(BuildContext context, {VoidCallback? onRemovePhoto}) {
+  static Future<void> show(BuildContext context, {ValueChanged<XFile>? onPhotoSelected}) {
     return showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => ProfilePhotoSheet(onRemovePhoto: onRemovePhoto),
+      builder: (ctx) => ProfilePhotoSheet(onPhotoSelected: onPhotoSelected),
     );
   }
 
@@ -75,21 +65,27 @@ class ProfilePhotoSheet extends StatelessWidget {
             icon: Icons.camera_alt_outlined,
             label: 'Take a Photo',
             subtitle: 'Open camera',
-            onTap: () {
+            onTap: () async {
               Navigator.of(context).pop();
-              // TODO: Add image_picker (camera) once team approves the package.
-              // ImagePicker().pickImage(source: ImageSource.camera)
-              //   .then((file) => _uploadPhoto(context, file));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Camera upload coming soon — awaiting image_picker approval.',
-                    style: GoogleFonts.poppins(fontSize: 12),
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                  backgroundColor: OleenaTheme.textDark,
-                ),
-              );
+              try {
+                final picker = ImagePicker();
+                final file = await picker.pickImage(
+                  source: ImageSource.camera,
+                  imageQuality: 85,
+                );
+                if (file != null && onPhotoSelected != null) {
+                  onPhotoSelected!(file);
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Could not open camera: $e'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
             },
           ),
 
@@ -100,38 +96,29 @@ class ProfilePhotoSheet extends StatelessWidget {
             icon: Icons.photo_library_outlined,
             label: 'Choose from Gallery',
             subtitle: 'Browse your photos',
-            onTap: () {
+            onTap: () async {
               Navigator.of(context).pop();
-              // TODO: Add image_picker (gallery) once team approves the package.
-              // ImagePicker().pickImage(source: ImageSource.gallery)
-              //   .then((file) => _uploadPhoto(context, file));
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Gallery upload coming soon — awaiting image_picker approval.',
-                    style: GoogleFonts.poppins(fontSize: 12),
-                  ),
-                  behavior: SnackBarBehavior.floating,
-                  backgroundColor: OleenaTheme.textDark,
-                ),
-              );
+              try {
+                final picker = ImagePicker();
+                final file = await picker.pickImage(
+                  source: ImageSource.gallery,
+                  imageQuality: 85,
+                );
+                if (file != null && onPhotoSelected != null) {
+                  onPhotoSelected!(file);
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Could not open gallery: $e'),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
+              }
             },
           ),
-
-          if (onRemovePhoto != null) ...[
-            const SizedBox(height: 10),
-            _PhotoOption(
-              icon: Icons.delete_outline_rounded,
-              label: 'Remove Photo',
-              subtitle: 'Revert to initials avatar',
-              iconColor: Colors.red.shade400,
-              labelColor: Colors.red.shade700,
-              onTap: () {
-                Navigator.of(context).pop();
-                onRemovePhoto!();
-              },
-            ),
-          ],
 
           const SizedBox(height: 14),
           TextButton(

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../../features/venue/widgets/full_screen_image_viewer.dart';
+import '../../core/auth_provider.dart';
 import '../../core/inquiry_api_service.dart';
 import '../../core/theme.dart';
+import '../../features/profile/providers/customer_profile_provider.dart';
 import '../../models/inquiry_model.dart';
 
 /// Screen displaying the complete details of an inquiry sent by the customer.
@@ -66,6 +70,10 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
       try {
         await _apiService.deleteInquiry(_inquiry.inquiryId);
         if (mounted) {
+          final auth = context.read<AuthProvider>();
+          if (auth.isAuthenticated) {
+            context.read<CustomerProfileProvider>().fetchProfile();
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Inquiry to ${_inquiry.vendorName} deleted.'),
@@ -453,7 +461,10 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                           'Current Status',
                           style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: OleenaTheme.textMuted),
                         ),
-                        _buildStatusBadge(_inquiry.status),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: _buildStatusBadge(_inquiry.status),
+                        ),
                       ],
                     ),
                   ],
@@ -560,22 +571,79 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: Container(
-                    height: 220,
-                    width: double.infinity,
-                    color: OleenaTheme.primaryTint,
-                    child: Image.network(
-                      _inquiry.attachmentUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Center(
-                        child: Text(
-                          'Attachment preview unavailable',
-                          style: GoogleFonts.poppins(fontSize: 12, color: OleenaTheme.textMuted),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FullScreenImageViewer(
+                          imageUrls: [_inquiry.attachmentUrl!],
+                          title: 'Inspiration Photo',
                         ),
                       ),
-                    ),
+                    );
+                  },
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Container(
+                          height: 220,
+                          width: double.infinity,
+                          color: OleenaTheme.primaryTint,
+                          child: Image.network(
+                            _inquiry.attachmentUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              color: const Color(0xFFFAF8F6),
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: const BoxDecoration(
+                                        color: OleenaTheme.primaryTint,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.image_not_supported_outlined, size: 28, color: OleenaTheme.primary),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'Attachment preview unavailable',
+                                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: OleenaTheme.textMuted),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Tap to view full screen',
+                                style: GoogleFonts.poppins(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -672,12 +740,15 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
         children: [
           Text(emoji, style: const TextStyle(fontSize: 12)),
           const SizedBox(width: 6),
-          Text(
-            status,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: fg,
+          Flexible(
+            child: Text(
+              status,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
