@@ -55,29 +55,30 @@ void main() {
     float f = snoise(st * 1.8 + r * 1.4 + vec2(0.0, t * 0.1));
     float n = clamp(f * 0.5 + 0.5, 0.0, 1.0);
 
-    vec3 colBase = vec3(1.0, 0.975, 0.965);
-    vec3 colBlush = vec3(0.992, 0.935, 0.953);
-    vec3 colRose = vec3(0.95, 0.85, 0.898);
-    vec3 colMauveGlow = vec3(0.85, 0.62, 0.74);
-    vec3 colDeepWine = vec3(0.557, 0.251, 0.435);
+    // Rich luxury satin palette with high-opacity blush, rose, and mauve waves
+    vec3 colBase = vec3(0.960, 0.890, 0.920);     // Warm silk rose foundation
+    vec3 colBlush = vec3(0.930, 0.820, 0.875);    // Gentle blush silk
+    vec3 colRose = vec3(0.885, 0.690, 0.795);     // Vibrant satin rose
+    vec3 colMauveGlow = vec3(0.760, 0.450, 0.630); // Brand mauve glow
+    vec3 colDeepWine = vec3(0.460, 0.160, 0.330);  // Deep satin plum wine
 
-    // Rich gradient interpolation along warped fluid lines
-    vec3 color = mix(colBase, colBlush, smoothstep(0.1, 0.5, n));
-    color = mix(color, colRose, smoothstep(0.4, 0.75, length(q)));
-    color = mix(color, colMauveGlow, smoothstep(0.55, 0.9, length(r)));
+    // Rich gradient interpolation along warped fluid lines with enhanced color opacity
+    vec3 color = mix(colBase, colBlush, smoothstep(0.05, 0.50, n));
+    color = mix(color, colRose, smoothstep(0.18, 0.65, length(q)) * 0.90);
+    color = mix(color, colMauveGlow, smoothstep(0.22, 0.70, length(r)) * 0.85);
 
-    // Subtle luminous ribbons / caustic silk gleam
+    // Luminous flowing ribbons / caustic silk gleam
     float ribbon = sin((st.x * 2.0 + st.y * 3.0 + f * 2.5) * 3.14159 + t * 0.8);
-    ribbon = smoothstep(0.7, 0.98, ribbon) * 0.22;
-    color = mix(color, colDeepWine, ribbon * 0.45);
+    ribbon = smoothstep(0.48, 0.94, ribbon) * 0.35;
+    color = mix(color, colDeepWine, ribbon * 0.65);
 
-    // Soft shimmering gold/champagne pearl highlights
-    float sparkle = pow(max(0.0, snoise(st * 8.0 - t * 0.4)), 3.5) * 0.35;
-    color += vec3(1.0, 0.95, 0.88) * sparkle;
+    // Soft shimmering rose-pearl highlights (subtle, non-blinding)
+    float sparkle = pow(max(0.0, snoise(st * 7.0 - t * 0.4)), 4.0) * 0.14;
+    color += vec3(0.96, 0.88, 0.92) * sparkle;
 
-    // Gentle vignette to keep edges soft and focus on cards
+    // Gentle mauve vignette to frame content and deepen corners
     float vignette = length(st - vec2(0.5, 0.45));
-    color = mix(color, colBlush, smoothstep(0.35, 0.95, vignette) * 0.3);
+    color = mix(color, colMauveGlow, smoothstep(0.35, 0.95, vignette) * 0.22);
 
     fragColor = vec4(color, 1.0);
 }

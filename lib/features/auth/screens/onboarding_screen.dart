@@ -71,6 +71,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           // ── 1. Animated Ambient Luxury Satin Background ──────────
           const Positioned.fill(child: _AnimatedSatinBackground()),
 
+          // ── Soft Contrast Legibility Scrim ────────────────────────
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.white.withValues(alpha: 0.65), // Ensures top bar & header text are crystal clear
+                      Colors.white.withValues(alpha: 0.20), // Rich animated silk shader flows through center
+                      Colors.white.withValues(alpha: 0.60), // Grounded clarity for bottom controls
+                    ],
+                    stops: const [0.0, 0.42, 1.0],
+                  ),
+                ),
+              ),
+            ),
+          ),
+
           // ── 2. Onboarding Main Content ───────────────────────────
           SafeArea(
             child: Column(
@@ -132,7 +152,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   fontSize: 11,
                   fontWeight: FontWeight.w700,
                   letterSpacing: 2.2,
-                  color: const Color(0xFF1F2937),
+                  color: const Color(0xFF111827),
                 ),
               ),
             ],
@@ -299,7 +319,7 @@ class _OnboardingSlide1 extends StatelessWidget {
                 style: GoogleFonts.playfairDisplay(
                   fontSize: 26,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1F2937),
+                  color: const Color(0xFF111827),
                   height: 1.22,
                 ),
               ),
@@ -308,7 +328,8 @@ class _OnboardingSlide1 extends StatelessWidget {
                 'Venues, photographers, florists, caterers and bands, all waiting to meet you.',
                 style: GoogleFonts.poppins(
                   fontSize: 13.5,
-                  color: const Color(0xFF6B7280),
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF374151),
                   height: 1.48,
                 ),
               ),
@@ -443,7 +464,7 @@ class _OnboardingSlide1 extends StatelessWidget {
                           style: GoogleFonts.playfairDisplay(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
-                            color: const Color(0xFF1F2937),
+                            color: const Color(0xFF111827),
                           ),
                         ),
                         const SizedBox(height: 4),
@@ -462,7 +483,8 @@ class _OnboardingSlide1 extends StatelessWidget {
                                 overflow: TextOverflow.ellipsis,
                                 style: GoogleFonts.poppins(
                                   fontSize: 11.5,
-                                  color: const Color(0xFF6B7280),
+                                  fontWeight: FontWeight.w500,
+                                  color: const Color(0xFF4B5563),
                                 ),
                               ),
                             ),
@@ -528,7 +550,7 @@ class _OnboardingSlide2 extends StatelessWidget {
                 style: GoogleFonts.playfairDisplay(
                   fontSize: 26,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1F2937),
+                  color: const Color(0xFF111827),
                   height: 1.22,
                 ),
               ),
@@ -537,7 +559,8 @@ class _OnboardingSlide2 extends StatelessWidget {
                 'Tap the heart on your favourites, then send an inquiry in a few taps.',
                 style: GoogleFonts.poppins(
                   fontSize: 13.5,
-                  color: const Color(0xFF6B7280),
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF374151),
                   height: 1.48,
                 ),
               ),
@@ -614,6 +637,15 @@ class _OnboardingSlide2 extends StatelessWidget {
                                     child: Image.network(
                                       'https://images.unsplash.com/photo-1542038784456-1ea8e935640e?q=80&w=600&auto=format&fit=crop',
                                       fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Container(
+                                        color: const Color(0xFFFDF0F4),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.image_not_supported,
+                                            color: OleenaTheme.primary,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                   Positioned(
@@ -651,7 +683,7 @@ class _OnboardingSlide2 extends StatelessWidget {
                               style: GoogleFonts.playfairDisplay(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
-                                color: const Color(0xFF1F2937),
+                                color: const Color(0xFF111827),
                               ),
                             ),
                             const SizedBox(height: 2),
@@ -659,7 +691,8 @@ class _OnboardingSlide2 extends StatelessWidget {
                               'Colombo, LK',
                               style: GoogleFonts.poppins(
                                 fontSize: 10,
-                                color: const Color(0xFF6B7280),
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF4B5563),
                               ),
                             ),
                           ],
@@ -709,6 +742,15 @@ class _OnboardingSlide2 extends StatelessWidget {
                                     child: Image.network(
                                       'https://images.unsplash.com/photo-1519225421980-715cb0215aed?q=80&w=600&auto=format&fit=crop',
                                       fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => Container(
+                                        color: const Color(0xFFFDF0F4),
+                                        child: const Center(
+                                          child: Icon(
+                                            Icons.image_not_supported,
+                                            color: OleenaTheme.primary,
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -779,7 +821,7 @@ class _OnboardingSlide2 extends StatelessWidget {
                               style: GoogleFonts.playfairDisplay(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
-                                color: const Color(0xFF1F2937),
+                                color: const Color(0xFF111827),
                               ),
                             ),
                             const SizedBox(height: 3),
@@ -787,7 +829,8 @@ class _OnboardingSlide2 extends StatelessWidget {
                               'Orchid Hotels',
                               style: GoogleFonts.poppins(
                                 fontSize: 11,
-                                color: const Color(0xFF6B7280),
+                                fontWeight: FontWeight.w500,
+                                color: const Color(0xFF4B5563),
                               ),
                             ),
                           ],
@@ -847,7 +890,7 @@ class _OnboardingSlide2 extends StatelessWidget {
                                 style: GoogleFonts.poppins(
                                   fontSize: 11.5,
                                   fontWeight: FontWeight.w600,
-                                  color: const Color(0xFF1F2937),
+                                  color: const Color(0xFF111827),
                                 ),
                               ),
                               Text(
@@ -907,7 +950,7 @@ class _OnboardingSlide3 extends StatelessWidget {
                 style: GoogleFonts.playfairDisplay(
                   fontSize: 26,
                   fontWeight: FontWeight.w700,
-                  color: const Color(0xFF1F2937),
+                  color: const Color(0xFF111827),
                   height: 1.22,
                 ),
               ),
@@ -916,7 +959,8 @@ class _OnboardingSlide3 extends StatelessWidget {
                 'Tell us your date, budget and style. We\'ll suggest a plan, step by step.',
                 style: GoogleFonts.poppins(
                   fontSize: 13.5,
-                  color: const Color(0xFF6B7280),
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFF374151),
                   height: 1.48,
                 ),
               ),
@@ -1040,7 +1084,7 @@ class _OnboardingSlide3 extends StatelessWidget {
                                     style: GoogleFonts.playfairDisplay(
                                       fontSize: 15,
                                       fontWeight: FontWeight.w700,
-                                      color: const Color(0xFF1F2937),
+                                      color: const Color(0xFF111827),
                                     ),
                                   ),
                                 ],
@@ -1138,14 +1182,15 @@ class _OnboardingSlide3 extends StatelessWidget {
                     style: GoogleFonts.poppins(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
-                      color: const Color(0xFF1F2937),
+                      color: const Color(0xFF111827),
                     ),
                   ),
                   Text(
                     value,
                     style: GoogleFonts.poppins(
                       fontSize: 10.5,
-                      color: const Color(0xFF6B7280),
+                      fontWeight: FontWeight.w500,
+                      color: const Color(0xFF4B5563),
                     ),
                   ),
                 ],
@@ -1250,8 +1295,8 @@ class _AnimatedSatinBackgroundState extends State<_AnimatedSatinBackground>
 
         return Stack(
           children: [
-            // Solid base matching Stitch WebGL (Ivory cream)
-            Container(color: const Color(0xFFFFF9F6)),
+            // Solid base matching Stitch WebGL (Warm silk blush foundation)
+            Container(color: const Color(0xFFFBF0F4)),
 
             // Ambient Orb 1 (Top Left) - Blush Rose
             Positioned(
@@ -1264,9 +1309,9 @@ class _AnimatedSatinBackgroundState extends State<_AnimatedSatinBackground>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      const Color(0xFFFDF0F4).withValues(alpha: 1.0),
-                      const Color(0xFFFDF0F4).withValues(alpha: 0.6),
-                      const Color(0xFFFFF9F6).withValues(alpha: 0.0),
+                      const Color(0xFFF5D6E2).withValues(alpha: 1.0),
+                      const Color(0xFFF5D6E2).withValues(alpha: 0.70),
+                      const Color(0xFFFBF0F4).withValues(alpha: 0.0),
                     ],
                   ),
                 ),
@@ -1284,9 +1329,9 @@ class _AnimatedSatinBackgroundState extends State<_AnimatedSatinBackground>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      const Color(0xFFF5DDE7).withValues(alpha: 1.0),
-                      const Color(0xFFF5DDE7).withValues(alpha: 0.7),
-                      const Color(0xFFFFF9F6).withValues(alpha: 0.0),
+                      const Color(0xFFE8BED2).withValues(alpha: 1.0),
+                      const Color(0xFFE8BED2).withValues(alpha: 0.75),
+                      const Color(0xFFFBF0F4).withValues(alpha: 0.0),
                     ],
                   ),
                 ),
@@ -1304,9 +1349,9 @@ class _AnimatedSatinBackgroundState extends State<_AnimatedSatinBackground>
                   shape: BoxShape.circle,
                   gradient: RadialGradient(
                     colors: [
-                      const Color(0xFFDFA9C4).withValues(alpha: 0.85),
-                      const Color(0xFFDFA9C4).withValues(alpha: 0.4),
-                      const Color(0xFFFFF9F6).withValues(alpha: 0.0),
+                      const Color(0xFFCE82A7).withValues(alpha: 0.90),
+                      const Color(0xFFCE82A7).withValues(alpha: 0.45),
+                      const Color(0xFFFBF0F4).withValues(alpha: 0.0),
                     ],
                   ),
                 ),
