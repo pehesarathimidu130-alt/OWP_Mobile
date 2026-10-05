@@ -30,6 +30,8 @@ class TestAuthProvider extends ChangeNotifier implements AuthProvider {
   String? role;
   @override
   int? customerId;
+  @override
+  String? profilePhotoUrl;
 
   bool logoutCalled = false;
 

@@ -21,6 +21,8 @@ class FakeAuthProvider extends ChangeNotifier implements AuthProvider {
   @override
   int? get customerId => 1;
   @override
+  String? get profilePhotoUrl => null;
+  @override
   bool get isLoading => false;
   @override
   String get userInitials => 'T';

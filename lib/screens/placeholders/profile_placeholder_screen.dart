@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../../core/auth_provider.dart';
 import '../../core/favorites_provider.dart';
 import '../../core/theme.dart';
+import '../../models/customer_profile_model.dart';
 
 /// Dynamic Profile Screen showing real user profile details from backend/auth state.
 class ProfileScreen extends StatelessWidget {
@@ -52,7 +53,7 @@ class ProfileScreen extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    // Avatar with user initials or icon
+                    // Avatar with user photo, initials or icon
                     Container(
                       width: 64,
                       height: 64,
@@ -61,20 +62,40 @@ class ProfileScreen extends StatelessWidget {
                         shape: BoxShape.circle,
                       ),
                       child: Center(
-                        child: isAuthenticated
-                            ? Text(
-                                authProvider.userInitials,
-                                style: GoogleFonts.poppins(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.w700,
-                                  color: OleenaTheme.primary,
+                        child: (isAuthenticated &&
+                                authProvider.profilePhotoUrl != null &&
+                                authProvider.profilePhotoUrl!.trim().isNotEmpty)
+                            ? ClipOval(
+                                child: Image.network(
+                                  CustomerProfile.resolveMediaUrl(authProvider.profilePhotoUrl) ??
+                                      authProvider.profilePhotoUrl!,
+                                  width: 64,
+                                  height: 64,
+                                  fit: BoxFit.cover,
+                                  errorBuilder: (_, __, ___) => Text(
+                                    authProvider.userInitials,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w700,
+                                      color: OleenaTheme.primary,
+                                    ),
+                                  ),
                                 ),
                               )
-                            : const Icon(
-                                Icons.person_outline_rounded,
-                                size: 32,
-                                color: OleenaTheme.primary,
-                              ),
+                            : isAuthenticated
+                                ? Text(
+                                    authProvider.userInitials,
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 22,
+                                      fontWeight: FontWeight.w700,
+                                      color: OleenaTheme.primary,
+                                    ),
+                                  )
+                                : const Icon(
+                                    Icons.person_outline_rounded,
+                                    size: 32,
+                                    color: OleenaTheme.primary,
+                                  ),
                       ),
                     ),
                     const SizedBox(width: 16),

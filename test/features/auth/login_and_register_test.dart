@@ -22,6 +22,8 @@ class MockAuthProvider extends ChangeNotifier implements AuthProvider {
   @override
   int? customerId;
   @override
+  String? profilePhotoUrl;
+  @override
   String get displayName => fullName ?? 'Oleena Member';
   @override
   String get userInitials => 'OM';

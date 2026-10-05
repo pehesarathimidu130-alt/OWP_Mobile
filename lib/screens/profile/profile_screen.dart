@@ -267,13 +267,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
             ),
     );
 
-    if (!isAuthenticated || photoUrl == null || photoUrl.trim().isEmpty) {
+    final resolvedUrl = CustomerProfile.resolveMediaUrl(photoUrl) ?? photoUrl;
+
+    if (!isAuthenticated || resolvedUrl == null || resolvedUrl.trim().isEmpty) {
       return monogram;
     }
 
     return ClipOval(
       child: Image.network(
-        photoUrl,
+        resolvedUrl,
         width: 68,
         height: 68,
         fit: BoxFit.cover,
@@ -356,7 +358,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   ),
                   child: _buildAvatarContent(
                     initials,
-                    profile is CustomerProfile ? profile.resolvedPhotoUrl : null,
+                    (profile is CustomerProfile && profile.resolvedPhotoUrl != null && profile.resolvedPhotoUrl!.isNotEmpty)
+                        ? profile.resolvedPhotoUrl
+                        : auth.profilePhotoUrl,
                     isAuthenticated,
                   ),
                 ),

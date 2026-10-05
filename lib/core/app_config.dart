@@ -20,12 +20,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppConfig {
   AppConfig._();
 
-  static const String _defaultDevIp = '172.20.10.2';
+  static const String _defaultDevIp = ' 192.168.1.6';
   static const String _productionBaseUrl = 'https://api.oleena.lk';
 
   /// Web Client ID for Google Sign-In. The backend expects this as the Audience.
   /// Replace this placeholder with the actual Web Client ID.
-  static const String googleWebClientId = '';
+  static const String googleWebClientId =
+      '800917200874-0vua6g9bauoaqtr6t4ah7t96vlkmte38.apps.googleusercontent.com';
 
   // ── SharedPreferences & Storage Keys ─────────────────────────────────────────
   static const String kHasSeenOnboarding = 'hasSeenOnboarding';

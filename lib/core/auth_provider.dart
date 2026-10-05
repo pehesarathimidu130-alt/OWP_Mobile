@@ -18,6 +18,8 @@ class AuthProvider extends ChangeNotifier {
   String? _role;
   int? _customerId;
 
+  String? _profilePhotoUrl;
+
   AuthProvider({FlutterSecureStorage? storage, ApiClient? apiClient})
       : _storage = storage ?? const FlutterSecureStorage(),
         _apiClient = apiClient ?? ApiClient();
@@ -29,6 +31,7 @@ class AuthProvider extends ChangeNotifier {
   String? get email => _email;
   String? get role => _role;
   int? get customerId => _customerId;
+  String? get profilePhotoUrl => _profilePhotoUrl;
 
   /// User-friendly display name (prioritizes fullName, then email prefix, then fallback)
   String get displayName {
@@ -67,6 +70,7 @@ class AuthProvider extends ChangeNotifier {
         _fullName = await _storage.read(key: 'user_full_name');
         _email = await _storage.read(key: 'user_email');
         _role = await _storage.read(key: 'user_role');
+        _profilePhotoUrl = await _storage.read(key: 'user_profile_photo');
 
         // If metadata is missing from storage, decode from JWT claims
         if (_fullName == null || _email == null) {
@@ -77,12 +81,14 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = false;
         _fullName = null;
         _email = null;
+        _profilePhotoUrl = null;
       }
     } catch (_) {
       _token = null;
       _isAuthenticated = false;
       _fullName = null;
       _email = null;
+      _profilePhotoUrl = null;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -135,7 +141,12 @@ class AuthProvider extends ChangeNotifier {
       });
 
       if (response != null && response is Map<String, dynamic>) {
-        await _handleAuthSuccess(response, fallbackEmail: account.email, fallbackName: account.displayName);
+        await _handleAuthSuccess(
+          response,
+          fallbackEmail: account.email,
+          fallbackName: account.displayName,
+          fallbackPhotoUrl: account.photoUrl,
+        );
       }
     } catch (e) {
       if (e.toString().contains('CANCELED')) {
@@ -187,6 +198,7 @@ class AuthProvider extends ChangeNotifier {
     Map<String, dynamic> response, {
     String? fallbackName,
     String? fallbackEmail,
+    String? fallbackPhotoUrl,
   }) async {
     final token = response['token']?.toString();
     if (token != null && token.isNotEmpty) {
@@ -201,11 +213,16 @@ class AuthProvider extends ChangeNotifier {
       final email = response['email']?.toString() ?? fallbackEmail;
       final role = response['role']?.toString() ?? 'Customer';
       final customerId = response['customerId'];
+      final photoUrl = response['profilePhotoUrl']?.toString() ??
+          response['profilePictureUrl']?.toString() ??
+          response['photoUrl']?.toString() ??
+          fallbackPhotoUrl;
 
       _fullName = name;
       _email = email;
       _role = role;
       if (customerId is int) _customerId = customerId;
+      _profilePhotoUrl = photoUrl;
 
       // Also parse token claims if still missing
       if (_fullName == null || _email == null) {
@@ -221,6 +238,9 @@ class AuthProvider extends ChangeNotifier {
       }
       if (_role != null) {
         await _storage.write(key: 'user_role', value: _role!);
+      }
+      if (_profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty) {
+        await _storage.write(key: 'user_profile_photo', value: _profilePhotoUrl!);
       }
 
       // Reset unauthorized guard on successful authentication
@@ -272,6 +292,7 @@ class AuthProvider extends ChangeNotifier {
     await _storage.delete(key: 'user_full_name');
     await _storage.delete(key: 'user_email');
     await _storage.delete(key: 'user_role');
+    await _storage.delete(key: 'user_profile_photo');
 
     try {
       final googleSignIn = GoogleSignIn();
@@ -283,6 +304,7 @@ class AuthProvider extends ChangeNotifier {
     _email = null;
     _role = null;
     _customerId = null;
+    _profilePhotoUrl = null;
     _isAuthenticated = false;
     notifyListeners();
   }
