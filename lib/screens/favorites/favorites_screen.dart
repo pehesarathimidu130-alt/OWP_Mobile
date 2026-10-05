@@ -43,10 +43,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   void didUpdateWidget(covariant FavoritesScreen oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
-      final authProvider = context.read<AuthProvider>();
-      if (authProvider.isAuthenticated) {
-        context.read<FavoritesProvider>().fetchFavorites();
-      }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final authProvider = context.read<AuthProvider>();
+        if (authProvider.isAuthenticated) {
+          context.read<FavoritesProvider>().fetchFavorites();
+        }
+      });
     }
   }
 
