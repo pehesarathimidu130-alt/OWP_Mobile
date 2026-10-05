@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
@@ -41,6 +40,16 @@ class FakeAuthProvider extends ChangeNotifier implements AuthProvider {
 
   @override
   Future<void> register(Map<String, dynamic> userData) async {}
+
+  @override
+  Future<void> signInWithGoogle(String serverClientId) async {}
+
+  @override
+  Future<void> updateUserSession({String? fullName, String? email}) async {
+    if (fullName != null) this.fullName = fullName;
+    if (email != null) this.email = email;
+    notifyListeners();
+  }
 }
 
 void main() {
@@ -127,6 +136,11 @@ void main() {
             builder: (context, state) =>
                 const Scaffold(body: Text('Login View')),
           ),
+          GoRoute(
+            path: '/home',
+            builder: (context, state) =>
+                const Scaffold(body: Text('Home View')),
+          ),
         ],
       );
 
@@ -147,14 +161,8 @@ void main() {
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 400));
 
-      // In kDebugMode (during development and widget tests), SplashScreen
-      // clears hasSeenOnboarding so onboarding is always presented.
-      // In release builds, it proceeds directly to /login.
-      if (kDebugMode) {
-        expect(find.text('Onboarding View'), findsOneWidget);
-      } else {
-        expect(find.text('Login View'), findsOneWidget);
-      }
+      // In guest-first flow, SplashScreen proceeds directly to /home when onboarding was seen.
+      expect(find.text('Home View'), findsOneWidget);
     });
 
     testWidgets('navigates to /home when onboarding seen and authenticated',
@@ -206,13 +214,8 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       // In kDebugMode (during development and widget tests), SplashScreen
-      // clears hasSeenOnboarding so onboarding is always presented.
-      // In release builds, it proceeds directly to /home.
-      if (kDebugMode) {
-        expect(find.text('Onboarding View'), findsOneWidget);
-      } else {
-        expect(find.text('Home View'), findsOneWidget);
-      }
+      // In guest-first flow, proceeds to /home.
+      expect(find.text('Home View'), findsOneWidget);
     });
   });
 
@@ -229,9 +232,9 @@ void main() {
             builder: (context, state) => const OnboardingScreen(),
           ),
           GoRoute(
-            path: '/login',
+            path: '/home',
             builder: (context, state) =>
-                const Scaffold(body: Text('Login View')),
+                const Scaffold(body: Text('Home View')),
           ),
         ],
       );
@@ -242,33 +245,36 @@ void main() {
         ),
       );
 
-      // Check first slide content
-      expect(find.text('Find Wedding Vendors'), findsOneWidget);
+      // Check first slide content (Stitch AI Onboarding Page 1: Discover)
+      expect(find.text('DISCOVER'), findsOneWidget);
+      expect(find.text('Everything for your big day, in one place'), findsOneWidget);
       expect(
-        find.text('Discover photographers, musicians, caterers and hotels.'),
+        find.text('Venues, photographers, florists, caterers and bands, all waiting to meet you.'),
         findsOneWidget,
       );
       expect(find.text('Skip'), findsOneWidget);
       expect(find.text('Next'), findsOneWidget);
 
-      // Tap Next to move to slide 2
+      // Tap Next to move to slide 2 (Stitch AI Onboarding Page 2: Shortlist)
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Plan Your Wedding'), findsOneWidget);
+      expect(find.text('SHORTLIST'), findsOneWidget);
+      expect(find.text('Save what you love, ask the vendor directly'), findsOneWidget);
       expect(
-        find.text('Organize your budget, tasks, timeline and vendors.'),
+        find.text('Tap the heart on your favourites, then send an inquiry in a few taps.'),
         findsOneWidget,
       );
 
-      // Tap Next to move to slide 3
+      // Tap Next to move to slide 3 (Stitch AI Onboarding Page 3: Intelligent Planning)
       await tester.tap(find.text('Next'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Get AI Recommendations'), findsOneWidget);
+      expect(find.text('INTELLIGENT PLANNING'), findsOneWidget);
+      expect(find.text('Plan together with AI'), findsOneWidget);
       expect(
         find.text(
-            'Let AI help create a wedding plan based on your requirements.'),
+            "Tell us your date, budget and style. We'll suggest a plan, step by step."),
         findsOneWidget,
       );
       expect(find.text('Get Started'), findsOneWidget);
@@ -277,15 +283,15 @@ void main() {
       await tester.tap(find.text('Get Started'));
       await tester.pumpAndSettle();
 
-      // Verify routed to /login
-      expect(find.text('Login View'), findsOneWidget);
+      // Verify routed to /home
+      expect(find.text('Home View'), findsOneWidget);
 
       // Verify SharedPreferences flag was updated
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool('hasSeenOnboarding'), isTrue);
     });
 
-    testWidgets('tapping Skip sets flag and navigates to /login immediately',
+    testWidgets('tapping Skip sets flag and navigates to /home immediately',
         (WidgetTester tester) async {
       SharedPreferences.setMockInitialValues({'hasSeenOnboarding': false});
 
@@ -297,9 +303,9 @@ void main() {
             builder: (context, state) => const OnboardingScreen(),
           ),
           GoRoute(
-            path: '/login',
+            path: '/home',
             builder: (context, state) =>
-                const Scaffold(body: Text('Login View')),
+                const Scaffold(body: Text('Home View')),
           ),
         ],
       );
@@ -313,7 +319,7 @@ void main() {
       await tester.tap(find.text('Skip'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Login View'), findsOneWidget);
+      expect(find.text('Home View'), findsOneWidget);
 
       final prefs = await SharedPreferences.getInstance();
       expect(prefs.getBool('hasSeenOnboarding'), isTrue);

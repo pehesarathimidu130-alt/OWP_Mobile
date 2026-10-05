@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../../core/api_client.dart';
-import '../../../core/auth_provider.dart';
 import '../../../models/customer_profile_model.dart';
 
 /// Provider managing customer profile state, remote fetching, updates, and password changes.
@@ -19,7 +19,7 @@ class CustomerProfileProvider extends ChangeNotifier {
   String? get errorMessage => _errorMessage;
 
   /// Fetches the authenticated customer's profile from OWP Backend.
-  Future<void> fetchProfile({AuthProvider? authFallback}) async {
+  Future<void> fetchProfile() async {
     _isLoading = true;
     _errorMessage = null;
     notifyListeners();
@@ -31,46 +31,9 @@ class CustomerProfileProvider extends ChangeNotifier {
         _profile = CustomerProfile.fromJson(response);
       }
     } on ApiException catch (e) {
-      // Graceful fallback to AuthProvider cached session data if offline or dev
-      if (authFallback != null && authFallback.isAuthenticated) {
-        final fullName = authFallback.displayName;
-        final parts = fullName.split(' ');
-        final firstName = parts.isNotEmpty ? parts.first : 'Customer';
-        final lastName = parts.length > 1 ? parts.skip(1).join(' ') : '';
-
-        _profile = CustomerProfile(
-          customerId: authFallback.customerId ?? 1,
-          userId: 1,
-          firstName: firstName,
-          lastName: lastName,
-          fullName: fullName,
-          email: authFallback.email ?? '',
-          phoneNumber: null,
-          createdAt: DateTime.now(),
-        );
-      } else {
-        _errorMessage = e.message;
-      }
+      _errorMessage = e.message;
     } catch (_) {
-      if (authFallback != null && authFallback.isAuthenticated) {
-        final fullName = authFallback.displayName;
-        final parts = fullName.split(' ');
-        final firstName = parts.isNotEmpty ? parts.first : 'Customer';
-        final lastName = parts.length > 1 ? parts.skip(1).join(' ') : '';
-
-        _profile = CustomerProfile(
-          customerId: authFallback.customerId ?? 1,
-          userId: 1,
-          firstName: firstName,
-          lastName: lastName,
-          fullName: fullName,
-          email: authFallback.email ?? '',
-          phoneNumber: null,
-          createdAt: DateTime.now(),
-        );
-      } else {
-        _errorMessage = 'Could not load profile. Please check your connection.';
-      }
+      _errorMessage = 'Could not load profile. Please check your connection.';
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -98,25 +61,6 @@ class CustomerProfileProvider extends ChangeNotifier {
 
       if (response != null && response is Map<String, dynamic>) {
         _profile = CustomerProfile.fromJson(response);
-      } else if (_profile != null) {
-        _profile = _profile!.copyWith(
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          fullName: '$firstName $lastName'.trim(),
-          phoneNumber: phoneNumber?.trim(),
-        );
-      }
-    } on ApiException catch (e) {
-      if (e.statusCode == 404 && _profile != null) {
-        // Local simulation fallback
-        _profile = _profile!.copyWith(
-          firstName: firstName.trim(),
-          lastName: lastName.trim(),
-          fullName: '$firstName $lastName'.trim(),
-          phoneNumber: phoneNumber?.trim(),
-        );
-      } else {
-        rethrow;
       }
     } finally {
       _isLoading = false;
@@ -140,6 +84,35 @@ class CustomerProfileProvider extends ChangeNotifier {
           'newPassword': newPassword,
         },
       );
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Uploads a customer profile photo via multipart/form-data.
+  Future<void> uploadProfilePhoto(XFile file) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _apiClient.postMultipart(
+        '/customer/profile/photo',
+        file: file,
+        fileFieldName: 'file',
+      );
+
+      if (response != null && response is Map<String, dynamic>) {
+        final photoUrl = response['profilePhotoUrl']?.toString() ?? response['photoUrl']?.toString();
+        if (photoUrl != null && _profile != null) {
+          _profile = _profile!.copyWith(profilePhotoUrl: photoUrl);
+        } else {
+          await fetchProfile();
+        }
+      } else {
+        await fetchProfile();
+      }
     } finally {
       _isLoading = false;
       notifyListeners();

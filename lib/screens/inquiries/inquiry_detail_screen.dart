@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../../features/venue/widgets/full_screen_image_viewer.dart';
+import '../../core/auth_provider.dart';
 import '../../core/inquiry_api_service.dart';
 import '../../core/theme.dart';
+import '../../features/profile/providers/customer_profile_provider.dart';
 import '../../models/inquiry_model.dart';
 
 /// Screen displaying the complete details of an inquiry sent by the customer.
@@ -66,6 +70,10 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
       try {
         await _apiService.deleteInquiry(_inquiry.inquiryId);
         if (mounted) {
+          final auth = context.read<AuthProvider>();
+          if (auth.isAuthenticated) {
+            context.read<CustomerProfileProvider>().fetchProfile();
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Inquiry to ${_inquiry.vendorName} deleted.'),
@@ -89,7 +97,14 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
 
   void _showEditSheet() {
     DateTime? editDate = _inquiry.weddingDate;
-    final guestCtrl = TextEditingController(text: _inquiry.guestCount?.toString() ?? '');
+    // Only pre-populate and show guest count when the inquiry already carries
+    // one (backward-compat: new inquiries for Photography/Music/Decoration
+    // will have guestCount == null and the row stays hidden).
+    final bool hasExistingGuestCount =
+        _inquiry.guestCount != null && _inquiry.guestCount! > 0;
+    final guestCtrl = TextEditingController(
+      text: hasExistingGuestCount ? _inquiry.guestCount.toString() : '',
+    );
     final budgetCtrl = TextEditingController(
         text: _inquiry.budget != null ? _inquiry.budget!.toStringAsFixed(0) : '');
     final msgCtrl = TextEditingController(text: _inquiry.message ?? '');
@@ -176,46 +191,64 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                       const SizedBox(height: 14),
 
                       // Guests & Budget
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Guests', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: guestCtrl,
-                                  keyboardType: TextInputType.number,
-                                  decoration: InputDecoration(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      // Guest count is shown only when the inquiry already
+                      // carries a value (backward-compat for old inquiries).
+                      if (hasExistingGuestCount) ...[
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Guests (optional)', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 6),
+                                  TextField(
+                                    controller: guestCtrl,
+                                    keyboardType: TextInputType.number,
+                                    decoration: InputDecoration(
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                      hintText: 'e.g. 200 (optional)',
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Budget (LKR)', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: budgetCtrl,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  decoration: InputDecoration(
-                                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Budget (LKR)', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
+                                  const SizedBox(height: 6),
+                                  TextField(
+                                    controller: budgetCtrl,
+                                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                                    decoration: InputDecoration(
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
+                          ],
+                        ),
+                        const SizedBox(height: 14),
+                      ] else ...[
+                        // Budget only (no guest count for this inquiry)
+                        Text('Budget (LKR)', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 6),
+                        TextField(
+                          controller: budgetCtrl,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          decoration: InputDecoration(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                        ],
-                      ),
-                      const SizedBox(height: 14),
+                        ),
+                        const SizedBox(height: 14),
+                      ],
 
                       // Message
                       Text('Message', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
@@ -238,7 +271,9 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                               : () async {
                                   setModalState(() => isSaving = true);
                                   try {
-                                    final guests = int.tryParse(guestCtrl.text.trim());
+                                    final guests = hasExistingGuestCount
+                                        ? int.tryParse(guestCtrl.text.trim())
+                                        : null;
                                     final budget = double.tryParse(budgetCtrl.text.replaceAll(',', '').trim());
                                     await _apiService.updateInquiry(
                                       inquiryId: _inquiry.inquiryId,
@@ -426,7 +461,10 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                           'Current Status',
                           style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w500, color: OleenaTheme.textMuted),
                         ),
-                        _buildStatusBadge(_inquiry.status),
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: _buildStatusBadge(_inquiry.status),
+                        ),
                       ],
                     ),
                   ],
@@ -465,14 +503,14 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                       'Wedding / Event Date',
                       _inquiry.formattedWeddingDate,
                     ),
-                    const Divider(height: 20),
-                    _buildDetailRow(
-                      Icons.people_alt_outlined,
-                      'Expected Guests',
-                      _inquiry.guestCount != null && _inquiry.guestCount! > 0
-                          ? '${_inquiry.guestCount} guests'
-                          : 'Not specified',
-                    ),
+                    if (_inquiry.guestCount != null && _inquiry.guestCount! > 0) ...[
+                      const Divider(height: 20),
+                      _buildDetailRow(
+                        Icons.people_alt_outlined,
+                        'Expected Guests',
+                        '${_inquiry.guestCount} guests',
+                      ),
+                    ],
                     const Divider(height: 20),
                     _buildDetailRow(
                       Icons.payments_outlined,
@@ -533,22 +571,79 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: Container(
-                    height: 220,
-                    width: double.infinity,
-                    color: OleenaTheme.primaryTint,
-                    child: Image.network(
-                      _inquiry.attachmentUrl!,
-                      fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) => Center(
-                        child: Text(
-                          'Attachment preview unavailable',
-                          style: GoogleFonts.poppins(fontSize: 12, color: OleenaTheme.textMuted),
+                GestureDetector(
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => FullScreenImageViewer(
+                          imageUrls: [_inquiry.attachmentUrl!],
+                          title: 'Inspiration Photo',
                         ),
                       ),
-                    ),
+                    );
+                  },
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(18),
+                        child: Container(
+                          height: 220,
+                          width: double.infinity,
+                          color: OleenaTheme.primaryTint,
+                          child: Image.network(
+                            _inquiry.attachmentUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              color: const Color(0xFFFAF8F6),
+                              child: Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(12),
+                                      decoration: const BoxDecoration(
+                                        color: OleenaTheme.primaryTint,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(Icons.image_not_supported_outlined, size: 28, color: OleenaTheme.primary),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      'Attachment preview unavailable',
+                                      style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w500, color: OleenaTheme.textMuted),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 12,
+                        right: 12,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.6),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 16),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Tap to view full screen',
+                                style: GoogleFonts.poppins(fontSize: 11, color: Colors.white, fontWeight: FontWeight.w500),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],
@@ -645,12 +740,15 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
         children: [
           Text(emoji, style: const TextStyle(fontSize: 12)),
           const SizedBox(width: 6),
-          Text(
-            status,
-            style: GoogleFonts.poppins(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: fg,
+          Flexible(
+            child: Text(
+              status,
+              style: GoogleFonts.poppins(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],

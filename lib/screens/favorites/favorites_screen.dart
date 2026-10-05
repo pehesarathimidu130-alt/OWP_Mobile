@@ -4,14 +4,20 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth_provider.dart';
 import '../../core/favorites_provider.dart';
+import '../../core/friendly_error.dart';
 import '../../core/theme.dart';
 import '../../widgets/listing_card.dart';
 
 /// Dynamic "My Favourites" screen showing saved listings from the Neon PostgreSQL database.
 class FavoritesScreen extends StatefulWidget {
+  final bool isActive;
   final VoidCallback? onExploreTap;
 
-  const FavoritesScreen({super.key, this.onExploreTap});
+  const FavoritesScreen({
+    super.key,
+    this.isActive = false,
+    this.onExploreTap,
+  });
 
   @override
   State<FavoritesScreen> createState() => _FavoritesScreenState();
@@ -21,14 +27,27 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        final authProvider = context.read<AuthProvider>();
-        if (authProvider.isAuthenticated) {
-          context.read<FavoritesProvider>().fetchFavorites();
+    if (widget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          final authProvider = context.read<AuthProvider>();
+          if (authProvider.isAuthenticated) {
+            context.read<FavoritesProvider>().fetchFavorites();
+          }
         }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant FavoritesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      final authProvider = context.read<AuthProvider>();
+      if (authProvider.isAuthenticated) {
+        context.read<FavoritesProvider>().fetchFavorites();
       }
-    });
+    }
   }
 
   void _navigateToExplore(BuildContext context) {
@@ -59,20 +78,14 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 1,
-        actions: [
-          if (isAuthenticated)
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: OleenaTheme.primary),
-              tooltip: 'Refresh favourites',
-              onPressed: () => favProvider.fetchFavorites(),
-            ),
-        ],
       ),
       body: SafeArea(
         child: _buildContent(context, isAuthenticated, favProvider),
       ),
     );
   }
+
+
 
   Widget _buildContent(
     BuildContext context,
@@ -176,6 +189,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
     // 3. Error State
     if (favProvider.errorMessage != null && favProvider.favoriteListings.isEmpty) {
+      final friendlyError = friendlyErrorMessage(favProvider.errorMessage);
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -194,19 +208,23 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
               ),
               const SizedBox(height: 8),
               Text(
-                favProvider.errorMessage!,
+                friendlyError,
                 textAlign: TextAlign.center,
                 style: GoogleFonts.poppins(fontSize: 12, color: OleenaTheme.textMuted),
               ),
               const SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: () => favProvider.fetchFavorites(),
-                icon: const Icon(Icons.refresh, size: 18),
-                label: const Text('Try Again'),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: Text(
+                  'Retry',
+                  style: GoogleFonts.poppins(fontWeight: FontWeight.w600),
+                ),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: OleenaTheme.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
                 ),
               ),
             ],

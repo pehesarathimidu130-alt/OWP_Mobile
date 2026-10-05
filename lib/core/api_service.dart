@@ -5,6 +5,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
 import 'app_config.dart';
+import 'session_events.dart';
 import '../models/listing_model.dart';
 import '../models/public_vendor_profile.dart';
 import '../models/vendor_model.dart';
@@ -131,7 +132,7 @@ class ApiService {
 
     try {
       final response = await _httpClient.get(uri, headers: headers).timeout(const Duration(seconds: 15));
-      return _processResponse(response);
+      return _processResponse(response, hasAuthHeader: headers.containsKey('Authorization'));
     } on TimeoutException {
       throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
@@ -152,7 +153,7 @@ class ApiService {
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       ).timeout(const Duration(seconds: 15));
-      return _processResponse(response);
+      return _processResponse(response, hasAuthHeader: headers.containsKey('Authorization'));
     } on TimeoutException {
       throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
@@ -173,7 +174,30 @@ class ApiService {
         headers: headers,
         body: body != null ? jsonEncode(body) : null,
       ).timeout(const Duration(seconds: 15));
-      return _processResponse(response);
+      return _processResponse(response, hasAuthHeader: headers.containsKey('Authorization'));
+    } on TimeoutException {
+      throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
+    } on SocketException catch (e) {
+      throw ApiException('Network unreachable: Please ensure backend is running at $baseUrl ($e)');
+    } on http.ClientException catch (e) {
+      throw ApiException('Connection failed: Cannot reach backend at $baseUrl (${e.message})');
+    }
+  }
+
+  /// Sends a PATCH request
+  Future<dynamic> patch(String endpoint, {Map<String, dynamic>? body}) async {
+    final uri = _buildUri(endpoint);
+    final headers = await _getHeaders();
+
+    try {
+      final response = await _httpClient
+          .patch(
+            uri,
+            headers: headers,
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(const Duration(seconds: 15));
+      return _processResponse(response, hasAuthHeader: headers.containsKey('Authorization'));
     } on TimeoutException {
       throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
@@ -190,7 +214,7 @@ class ApiService {
 
     try {
       final response = await _httpClient.delete(uri, headers: headers).timeout(const Duration(seconds: 15));
-      return _processResponse(response);
+      return _processResponse(response, hasAuthHeader: headers.containsKey('Authorization'));
     } on TimeoutException {
       throw ApiException('Connection timed out: Backend at $baseUrl did not respond in time.');
     } on SocketException catch (e) {
@@ -261,7 +285,7 @@ class ApiService {
     final uri = _buildUri('/favorites/$listingId');
     final headers = await _getHeaders();
     final response = await _httpClient.delete(uri, headers: headers);
-    final processed = _processResponse(response);
+    final processed = _processResponse(response, hasAuthHeader: headers.containsKey('Authorization'));
     if (processed is Map<String, dynamic> && processed.containsKey('isFavorite')) {
       return processed['isFavorite'] == true;
     }
@@ -343,17 +367,14 @@ class ApiService {
     }
   }
 
-  /// Submits an inquiry with optional photo attachment via multipart/form-data.
-  Future<Map<String, dynamic>> submitInquiry({
-    int? vendorId,
-    int? serviceId,
-    DateTime? weddingDate,
-    int? guestCount,
-    double? budget,
-    required String message,
-    XFile? photoAttachment,
+  /// Sends a multipart POST request with an optional file attachment.
+  Future<dynamic> postMultipart(
+    String endpoint, {
+    Map<String, String>? fields,
+    XFile? file,
+    String fileFieldName = 'file',
   }) async {
-    final uri = _buildUri('/inquiries');
+    final uri = _buildUri(endpoint);
     final request = http.MultipartRequest('POST', uri);
 
     // Attach Bearer token if logged in
@@ -366,34 +387,17 @@ class ApiService {
 
     request.headers['Accept'] = 'application/json';
 
-    // Add fields
-    if (vendorId != null && vendorId > 0) {
-      request.fields['vendorId'] = vendorId.toString();
+    if (fields != null) {
+      request.fields.addAll(fields);
     }
-    if (serviceId != null && serviceId > 0) {
-      request.fields['serviceId'] = serviceId.toString();
-    }
-    if (weddingDate != null) {
-      request.fields['weddingDate'] = weddingDate.toIso8601String();
-    }
-    if (guestCount != null && guestCount > 0) {
-      request.fields['guestCount'] = guestCount.toString();
-    }
-    if (budget != null && budget > 0) {
-      request.fields['budget'] = budget.toString();
-    }
-    request.fields['message'] = message.trim();
 
-    // Attach photo if provided
-    if (photoAttachment != null) {
-      final bytes = await photoAttachment.readAsBytes();
+    if (file != null) {
+      final bytes = await file.readAsBytes();
       request.files.add(
         http.MultipartFile.fromBytes(
-          'photo',
+          fileFieldName,
           bytes,
-          filename: photoAttachment.name.isNotEmpty
-              ? photoAttachment.name
-              : 'inquiry_attachment.jpg',
+          filename: file.name.isNotEmpty ? file.name : 'upload.jpg',
         ),
       );
     }
@@ -401,16 +405,43 @@ class ApiService {
     try {
       final streamedResponse = await _httpClient.send(request);
       final response = await http.Response.fromStream(streamedResponse);
-      final result = _processResponse(response);
-      if (result is Map<String, dynamic>) {
-        return result;
-      }
-      return {'success': true};
+      return _processResponse(response, hasAuthHeader: request.headers.containsKey('Authorization'));
     } on SocketException catch (e) {
       throw ApiException('Network unreachable at $baseUrl ($e)');
     } on http.ClientException catch (e) {
       throw ApiException('Connection failed: Cannot reach backend at $baseUrl (${e.message})');
     }
+  }
+
+  /// Submits an inquiry with optional photo attachment via multipart/form-data.
+  Future<Map<String, dynamic>> submitInquiry({
+    int? vendorId,
+    int? serviceId,
+    DateTime? weddingDate,
+    int? guestCount,
+    double? budget,
+    required String message,
+    XFile? photoAttachment,
+  }) async {
+    final fields = <String, String>{};
+    if (vendorId != null && vendorId > 0) fields['vendorId'] = vendorId.toString();
+    if (serviceId != null && serviceId > 0) fields['serviceId'] = serviceId.toString();
+    if (weddingDate != null) fields['weddingDate'] = weddingDate.toIso8601String();
+    if (guestCount != null && guestCount > 0) fields['guestCount'] = guestCount.toString();
+    if (budget != null && budget > 0) fields['budget'] = budget.toString();
+    fields['message'] = message.trim();
+
+    final result = await postMultipart(
+      '/inquiries',
+      fields: fields,
+      file: photoAttachment,
+      fileFieldName: 'photo',
+    );
+
+    if (result is Map<String, dynamic>) {
+      return result;
+    }
+    return {'success': true};
   }
 
   /// Fetches all inquiries created by the authenticated customer
@@ -487,8 +518,23 @@ class ApiService {
 
   // ─── Internal Response Processing ──────────────────────────────────────────
 
-  dynamic _processResponse(http.Response response) {
+  dynamic _processResponse(http.Response response, {bool hasAuthHeader = false}) {
     final statusCode = response.statusCode;
+
+    // 401 handling ONLY when the request actually carried an Authorization header,
+    // and NEVER on login, register, or google auth calls.
+    final requestPath = response.request?.url.path ?? '';
+    final isAuthEndpoint = requestPath.contains('/auth/customer/login') ||
+        requestPath.contains('/auth/login') ||
+        requestPath.contains('/auth/customer/register') ||
+        requestPath.contains('/auth/register') ||
+        requestPath.contains('/auth/customer/google') ||
+        requestPath.contains('/auth/google');
+
+    if (statusCode == 401 && hasAuthHeader && !isAuthEndpoint) {
+      _storage.delete(key: AppConfig.kAuthToken).catchError((_) {});
+      unawaited(SessionEvents.triggerUnauthorized());
+    }
 
     dynamic decodedBody;
     if (response.body.isNotEmpty) {

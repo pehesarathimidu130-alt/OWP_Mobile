@@ -1,7 +1,13 @@
 import 'dart:async';
 import 'dart:io';
+
 import 'package:flutter/foundation.dart'
-    show debugPrint, defaultTargetPlatform, kIsWeb, kReleaseMode, TargetPlatform;
+    show
+        debugPrint,
+        defaultTargetPlatform,
+        kIsWeb,
+        kReleaseMode,
+        TargetPlatform;
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Global API configuration for the OWP shared backend.
@@ -14,13 +20,24 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppConfig {
   AppConfig._();
 
-  static const String _defaultDevIp = '192.168.1.2';
+  static const String _defaultDevIp = '172.20.10.2';
   static const String _productionBaseUrl = 'https://api.oleena.lk';
+
+  /// Web Client ID for Google Sign-In. The backend expects this as the Audience.
+  /// Replace this placeholder with the actual Web Client ID.
+  static const String googleWebClientId = '';
 
   // ── SharedPreferences & Storage Keys ─────────────────────────────────────────
   static const String kHasSeenOnboarding = 'hasSeenOnboarding';
   static const String kAuthToken = 'auth_token';
   static const String kCachedDevIp = 'cached_dev_host_ip';
+
+  /// Dev switch to reset onboarding and session state on app launch (debug only).
+  /// Activated with `--dart-define=FRESH_START=true`.
+  static const bool freshStart = bool.fromEnvironment(
+    'FRESH_START',
+    defaultValue: false,
+  );
 
   // ── Runtime Resolved State ──────────────────────────────────────────────────
   static String? _resolvedHost;
@@ -136,7 +153,9 @@ class AppConfig {
       if (defaultTargetPlatform == TargetPlatform.android) {
         if (await _canConnect('10.0.2.2', port, timeoutMs: 200)) {
           _resolvedHost = '10.0.2.2';
-          debugPrint('[AppConfig] Connected via Android Emulator (10.0.2.2:$port)');
+          debugPrint(
+            '[AppConfig] Connected via Android Emulator (10.0.2.2:$port)',
+          );
           return;
         }
       }
@@ -157,7 +176,9 @@ class AppConfig {
       // 5. Quick probe default IP
       if (await _canConnect(_defaultDevIp, port, timeoutMs: 300)) {
         _resolvedHost = _defaultDevIp;
-        debugPrint('[AppConfig] Connected via default LAN IP: $_defaultDevIp:$port');
+        debugPrint(
+          '[AppConfig] Connected via default LAN IP: $_defaultDevIp:$port',
+        );
         return;
       }
 
@@ -187,7 +208,9 @@ class AppConfig {
       final port = int.tryParse(backendPort) ?? 5131;
 
       // 1. Fast checks for loopback & emulator
-      if (await _canConnect('127.0.0.1', port, timeoutMs: 200)) return '127.0.0.1';
+      if (await _canConnect('127.0.0.1', port, timeoutMs: 200)) {
+        return '127.0.0.1';
+      }
       if (defaultTargetPlatform == TargetPlatform.android &&
           await _canConnect('10.0.2.2', port, timeoutMs: 200)) {
         return '10.0.2.2';
@@ -284,21 +307,23 @@ class AppConfig {
     int pending = ips.length;
 
     for (final ip in ips) {
-      _canConnect(ip, port, timeoutMs: timeoutMs).then((ok) {
-        if (ok && !completer.isCompleted) {
-          completer.complete(ip);
-        } else {
-          pending--;
-          if (pending == 0 && !completer.isCompleted) {
-            completer.complete(null);
-          }
-        }
-      }).catchError((_) {
-        pending--;
-        if (pending == 0 && !completer.isCompleted) {
-          completer.complete(null);
-        }
-      });
+      _canConnect(ip, port, timeoutMs: timeoutMs)
+          .then((ok) {
+            if (ok && !completer.isCompleted) {
+              completer.complete(ip);
+            } else {
+              pending--;
+              if (pending == 0 && !completer.isCompleted) {
+                completer.complete(null);
+              }
+            }
+          })
+          .catchError((_) {
+            pending--;
+            if (pending == 0 && !completer.isCompleted) {
+              completer.complete(null);
+            }
+          });
     }
 
     return completer.future;

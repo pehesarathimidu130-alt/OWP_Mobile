@@ -6,6 +6,7 @@ import 'explore/explore_screen.dart';
 import 'favorites/favorites_screen.dart';
 import 'inquiries/my_inquiries_screen.dart';
 import 'profile/profile_screen.dart';
+import '../widgets/ensure_logged_in.dart';
 
 // ---------------------------------------------------------------------------
 // Icon for the centre AI FAB — change this one constant to swap the icon.
@@ -53,10 +54,18 @@ class _MainNavigationState extends State<MainNavigation> {
   ];
 
   List<Widget> _buildScreens() => [
-        const ExploreScreen(),
-        FavoritesScreen(onExploreTap: () => setState(() => _selectedIndex = 0)),
-        MyInquiriesScreen(onExploreTap: () => setState(() => _selectedIndex = 0)),
-        const ProfileScreen(),
+        ExploreScreen(onFavoritesTap: () => setState(() => _selectedIndex = 1)),
+        FavoritesScreen(
+          isActive: _selectedIndex == 1,
+          onExploreTap: () => setState(() => _selectedIndex = 0),
+        ),
+        MyInquiriesScreen(
+          isActive: _selectedIndex == 2,
+          onExploreTap: () => setState(() => _selectedIndex = 0),
+        ),
+        ProfileScreen(
+          isActive: _selectedIndex == 3,
+        ),
       ];
 
   @override
@@ -182,7 +191,15 @@ class _MainNavigationState extends State<MainNavigation> {
           highlightElevation: 6,
           shape: const CircleBorder(),
           // Push (not go) so back button returns to the current tab.
-          onPressed: () => context.push('/ai-chat'),
+          onPressed: () async {
+            final ok = await ensureLoggedIn(
+              context,
+              message: 'You need to log in or register to use this feature.',
+            );
+            if (ok && context.mounted) {
+              context.push('/ai-chat');
+            }
+          },
           child: const Icon(_kAiIcon, size: 30),
         ),
       ),

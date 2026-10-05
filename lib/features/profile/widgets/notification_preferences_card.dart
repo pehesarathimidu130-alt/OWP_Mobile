@@ -4,16 +4,18 @@ import 'package:provider/provider.dart';
 import '../../../core/theme.dart';
 import '../providers/notification_preferences_provider.dart';
 
-/// Card widget displaying notification preference toggle switches.
+/// Card widget displaying customer notification preference options.
 ///
-/// Reads and writes through [NotificationPreferencesProvider].
-/// Designed to be dropped into the profile screen body without external state.
+/// Connected to [NotificationPreferencesProvider] with optimistic toggle updates
+/// and backend persistence.
 class NotificationPreferencesCard extends StatelessWidget {
   const NotificationPreferencesCard({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final prefs = context.watch<NotificationPreferencesProvider>();
+    final prefs = Provider.of<NotificationPreferencesProvider?>(context, listen: true);
+    final inquiryUpdates = prefs?.inquiryUpdates ?? true;
+    final priceChanges = prefs?.priceChanges ?? true;
 
     return Container(
       padding: const EdgeInsets.all(18),
@@ -47,12 +49,14 @@ class NotificationPreferencesCard extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 10),
-              Text(
-                'Notification Preferences',
-                style: GoogleFonts.poppins(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: OleenaTheme.textDark,
+              Expanded(
+                child: Text(
+                  'Notification Preferences',
+                  style: GoogleFonts.poppins(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: OleenaTheme.textDark,
+                  ),
                 ),
               ),
             ],
@@ -60,44 +64,48 @@ class NotificationPreferencesCard extends StatelessWidget {
 
           const SizedBox(height: 14),
 
-          _NotifToggle(
-            icon: Icons.local_offer_outlined,
-            title: 'New Offers & Packages',
-            subtitle: 'Alerts when vendors post new deals',
-            value: prefs.newOffers,
-            onChanged: prefs.toggleNewOffers,
-          ),
-          const Divider(height: 1, thickness: 0.6),
-          _NotifToggle(
+          _PreferenceRow(
             icon: Icons.chat_bubble_outline_rounded,
             title: 'Inquiry Updates',
             subtitle: 'Status changes on your inquiries',
-            value: prefs.inquiryUpdates,
-            onChanged: prefs.toggleInquiryUpdates,
+            value: inquiryUpdates,
+            onChanged: (val) async {
+              if (prefs == null) return;
+              try {
+                await prefs.toggleInquiryUpdates(val);
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to update inquiry notification preference.'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
+            },
           ),
           const Divider(height: 1, thickness: 0.6),
-          _NotifToggle(
-            icon: Icons.event_outlined,
-            title: 'Wedding Reminders',
-            subtitle: 'Countdown and planning milestones',
-            value: prefs.weddingReminders,
-            onChanged: prefs.toggleWeddingReminders,
-          ),
-          const Divider(height: 1, thickness: 0.6),
-          _NotifToggle(
-            icon: Icons.mail_outline_rounded,
-            title: 'Weekly Digest',
-            subtitle: 'A curated weekly roundup',
-            value: prefs.weeklyDigest,
-            onChanged: prefs.toggleWeeklyDigest,
-          ),
-          const Divider(height: 1, thickness: 0.6),
-          _NotifToggle(
-            icon: Icons.campaign_outlined,
-            title: 'Promotions',
-            subtitle: 'Special offers from OWP partners',
-            value: prefs.promotions,
-            onChanged: prefs.togglePromotions,
+          _PreferenceRow(
+            icon: Icons.favorite_border_rounded,
+            title: 'Favourite Price Changes',
+            subtitle: 'Alerts when saved services change prices',
+            value: priceChanges,
+            onChanged: (val) async {
+              if (prefs == null) return;
+              try {
+                await prefs.togglePriceChanges(val);
+              } catch (_) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Failed to update price change notification preference.'),
+                      duration: Duration(seconds: 2),
+                    ),
+                  );
+                }
+              }
+            },
           ),
         ],
       ),
@@ -105,15 +113,15 @@ class NotificationPreferencesCard extends StatelessWidget {
   }
 }
 
-/// Single row toggle item inside [NotificationPreferencesCard].
-class _NotifToggle extends StatelessWidget {
+/// Single interactive toggle row inside [NotificationPreferencesCard].
+class _PreferenceRow extends StatelessWidget {
   final IconData icon;
   final String title;
   final String subtitle;
   final bool value;
-  final ValueChanged<bool> onChanged;
+  final ValueChanged<bool>? onChanged;
 
-  const _NotifToggle({
+  const _PreferenceRow({
     required this.icon,
     required this.title,
     required this.subtitle,
@@ -127,7 +135,7 @@ class _NotifToggle extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10),
       child: Row(
         children: [
-          Icon(icon, size: 18, color: OleenaTheme.textMuted),
+          Icon(icon, size: 18, color: OleenaTheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -153,11 +161,8 @@ class _NotifToggle extends StatelessWidget {
           ),
           Switch.adaptive(
             value: value,
+            activeColor: OleenaTheme.primary,
             onChanged: onChanged,
-            activeThumbColor: OleenaTheme.primary,
-            activeTrackColor: OleenaTheme.primaryTint,
-            inactiveTrackColor: Colors.grey.shade200,
-            inactiveThumbColor: Colors.grey.shade400,
           ),
         ],
       ),

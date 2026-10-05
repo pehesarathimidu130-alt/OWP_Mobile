@@ -48,6 +48,13 @@ class MockAuthProvider extends ChangeNotifier implements AuthProvider {
 
   @override
   Future<void> logout() async {}
+
+  @override
+  Future<void> updateUserSession({String? fullName, String? email}) async {
+    if (fullName != null) this.fullName = fullName;
+    if (email != null) this.email = email;
+    notifyListeners();
+  }
 }
 
 void main() {

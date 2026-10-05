@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -5,16 +7,23 @@ import 'package:provider/provider.dart';
 import '../../core/api_service.dart';
 import '../../core/auth_gate.dart';
 import '../../core/auth_provider.dart';
+import '../../core/friendly_error.dart';
 import '../../core/inquiry_api_service.dart';
 import '../../core/theme.dart';
 import '../../models/inquiry_model.dart';
+import '../../features/profile/providers/customer_profile_provider.dart';
 import 'inquiry_detail_screen.dart';
 
 /// Screen displaying the list of all inquiries sent by the customer.
 class MyInquiriesScreen extends StatefulWidget {
+  final bool isActive;
   final VoidCallback? onExploreTap;
 
-  const MyInquiriesScreen({super.key, this.onExploreTap});
+  const MyInquiriesScreen({
+    super.key,
+    this.isActive = false,
+    this.onExploreTap,
+  });
 
   @override
   State<MyInquiriesScreen> createState() => _MyInquiriesScreenState();
@@ -29,9 +38,19 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    if (widget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _checkAuthAndLoad();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant MyInquiriesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
       _checkAuthAndLoad();
-    });
+    }
   }
 
   void _checkAuthAndLoad() {
@@ -62,15 +81,31 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
       }
     } on ApiException catch (e) {
       if (mounted) {
+        final friendlyMessage = friendlyErrorMessage(e);
+
         setState(() {
-          _errorMessage = e.message;
+          _errorMessage = friendlyMessage;
           _isLoading = false;
         });
       }
-    } catch (e) {
+    } on SocketException {
       if (mounted) {
         setState(() {
-          _errorMessage = 'Failed to load inquiries: $e';
+          _errorMessage = 'Could not reach the server. Please check your connection.';
+          _isLoading = false;
+        });
+      }
+    } on TimeoutException {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Could not reach the server. Please check your connection.';
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Could not reach the server. Please check your connection.';
           _isLoading = false;
         });
       }
@@ -93,6 +128,10 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
     );
     if (result == true && mounted) {
       _fetchInquiries();
+      final auth = context.read<AuthProvider>();
+      if (auth.isAuthenticated) {
+        context.read<CustomerProfileProvider>().fetchProfile();
+      }
     }
   }
 
@@ -148,6 +187,10 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
           _inquiries.removeWhere((i) => i.inquiryId == inquiry.inquiryId);
         });
         if (mounted) {
+          final auth = context.read<AuthProvider>();
+          if (auth.isAuthenticated) {
+            context.read<CustomerProfileProvider>().fetchProfile();
+          }
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Inquiry to ${inquiry.vendorName} removed successfully.'),
@@ -172,7 +215,11 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
 
   void _showEditInquiryModal(Inquiry inquiry) {
     DateTime? editDate = inquiry.weddingDate;
-    final guestCtrl = TextEditingController(text: inquiry.guestCount?.toString() ?? '');
+    final guestCtrl = TextEditingController(
+      text: (inquiry.guestCount != null && inquiry.guestCount! > 0)
+          ? inquiry.guestCount.toString()
+          : '',
+    );
     final budgetCtrl = TextEditingController(
         text: inquiry.budget != null ? inquiry.budget!.toStringAsFixed(0) : '');
     final msgCtrl = TextEditingController(text: inquiry.message ?? '');
@@ -277,51 +324,88 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
                       const SizedBox(height: 14),
 
                       // Guest Count & Budget
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Guests',
-                                    style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: guestCtrl,
-                                  keyboardType: TextInputType.number,
-                                  decoration: InputDecoration(
-                                    contentPadding:
-                                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                                    hintText: 'e.g. 200',
-                                  ),
+                      // Guest count field is shown only when the inquiry
+                      // already has a guest count value — no category
+                      // detection needed in the edit path.
+                      Builder(builder: (ctx) {
+                        final hasGuests =
+                            inquiry.guestCount != null && inquiry.guestCount! > 0;
+                        if (hasGuests) {
+                          return Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Guests (optional)',
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 12, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 6),
+                                    TextField(
+                                      controller: guestCtrl,
+                                      keyboardType: TextInputType.number,
+                                      decoration: InputDecoration(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12)),
+                                        hintText: 'e.g. 200',
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text('Budget (LKR)',
-                                    style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w600)),
-                                const SizedBox(height: 6),
-                                TextField(
-                                  controller: budgetCtrl,
-                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                                  decoration: InputDecoration(
-                                    contentPadding:
-                                        const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                                    hintText: 'e.g. 450000',
-                                  ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Budget (LKR)',
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 12, fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 6),
+                                    TextField(
+                                      controller: budgetCtrl,
+                                      keyboardType:
+                                          const TextInputType.numberWithOptions(decimal: true),
+                                      decoration: InputDecoration(
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                        border: OutlineInputBorder(
+                                            borderRadius: BorderRadius.circular(12)),
+                                        hintText: 'e.g. 450000',
+                                      ),
+                                    ),
+                                  ],
                                 ),
-                              ],
+                              ),
+                            ],
+                          );
+                        }
+                        // No existing guest count → Budget is full-width;
+                        // guestCount stays null in the update payload.
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Budget (LKR)',
+                                style: GoogleFonts.poppins(
+                                    fontSize: 12, fontWeight: FontWeight.w600)),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: budgetCtrl,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(decimal: true),
+                              decoration: InputDecoration(
+                                contentPadding:
+                                    const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12)),
+                                hintText: 'e.g. 450000',
+                              ),
                             ),
-                          ),
-                        ],
-                      ),
+                          ],
+                        );
+                      }),
                       const SizedBox(height: 14),
 
                       // Message
@@ -553,12 +637,16 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
                             children: [
                               const Icon(Icons.event_outlined, size: 13, color: OleenaTheme.textMuted),
                               const SizedBox(width: 4),
-                              Text(
-                                'Wedding Date: ${inquiry.formattedWeddingDate}',
-                                style: GoogleFonts.poppins(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w500,
-                                  color: OleenaTheme.textDark,
+                              Expanded(
+                                child: Text(
+                                  'Wedding Date: ${inquiry.formattedWeddingDate}',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                    color: OleenaTheme.textDark,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
                             ],
@@ -569,7 +657,9 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
                     const SizedBox(width: 8),
 
                     // Status Badge (Pending ⏳ or Replied ✅)
-                    _buildStatusBadge(inquiry.status),
+                    Flexible(
+                      child: _buildStatusBadge(inquiry.status),
+                    ),
                   ],
                 ),
 
@@ -657,12 +747,15 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
         children: [
           Text(emoji, style: const TextStyle(fontSize: 11)),
           const SizedBox(width: 4),
-          Text(
-            status,
-            style: GoogleFonts.poppins(
-              fontSize: 11,
-              fontWeight: FontWeight.w600,
-              color: fg,
+          Flexible(
+            child: Text(
+              status,
+              style: GoogleFonts.poppins(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: fg,
+              ),
+              overflow: TextOverflow.ellipsis,
             ),
           ),
         ],
@@ -703,7 +796,7 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
             ),
             const SizedBox(height: 10),
             Text(
-              'Browse verified wedding venues, photographers, and caterers, then send them your vision and questions.',
+              'No inquiries yet. Find a vendor and send your first inquiry.',
               textAlign: TextAlign.center,
               style: GoogleFonts.poppins(
                 fontSize: 13,
@@ -768,7 +861,7 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
             ElevatedButton.icon(
               onPressed: _fetchInquiries,
               icon: const Icon(Icons.refresh_rounded, size: 16),
-              label: const Text('Try Again'),
+              label: const Text('Retry'),
               style: ElevatedButton.styleFrom(
                 backgroundColor: OleenaTheme.primary,
                 foregroundColor: Colors.white,

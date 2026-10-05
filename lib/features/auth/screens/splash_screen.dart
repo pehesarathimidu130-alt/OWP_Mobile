@@ -1,7 +1,9 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/app_config.dart';
 import '../../../core/auth_provider.dart';
 import '../../../core/theme.dart';
 
@@ -49,20 +51,31 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _checkStateAndNavigate() async {
+    final auth = context.read<AuthProvider>();
     final startTime = DateTime.now();
     bool hasSeenOnboarding = false;
+
+    // 0. FRESH_START Dev Switch: debug only, clears onboarding and stored session
+    if (kDebugMode && AppConfig.freshStart) {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove(AppConfig.kHasSeenOnboarding);
+        await auth.logout();
+      } catch (_) {}
+    }
 
     // 1. Check Onboarding Flag ONLY (never check auth token to block startup)
     try {
       final prefs = await SharedPreferences.getInstance();
-      hasSeenOnboarding = prefs.getBool('hasSeenOnboarding') ?? false;
+      if (!mounted) return;
+      hasSeenOnboarding = prefs.getBool(AppConfig.kHasSeenOnboarding) ?? false;
       // Silently restore cached session in background so profile data is ready
-      if (mounted) {
-        context.read<AuthProvider>().checkAuthStatus();
-      }
+      auth.checkAuthStatus();
     } catch (_) {
       hasSeenOnboarding = false;
     }
+
+    if (!mounted) return;
 
     // 2. Minimum ~1.2s display before navigating for brand presentation
     final elapsed = DateTime.now().difference(startTime);

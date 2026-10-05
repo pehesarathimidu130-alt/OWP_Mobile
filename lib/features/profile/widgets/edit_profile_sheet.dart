@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../core/api_client.dart';
+import '../../../core/auth_provider.dart';
 import '../../../core/theme.dart';
 import '../../../models/customer_profile_model.dart';
 import '../../../widgets/app_text_field.dart';
@@ -59,11 +60,22 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
     setState(() => _isSaving = true);
 
     try {
+      final firstName = _firstNameController.text.trim();
+      final lastName = _lastNameController.text.trim();
+      final phone = _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim();
+
       await context.read<CustomerProfileProvider>().updateProfile(
-            firstName: _firstNameController.text.trim(),
-            lastName: _lastNameController.text.trim(),
-            phoneNumber: _phoneController.text.trim().isEmpty ? null : _phoneController.text.trim(),
+            firstName: firstName,
+            lastName: lastName,
+            phoneNumber: phone,
           );
+
+      if (!mounted) return;
+
+      final updatedFullName = '$firstName $lastName'.trim();
+      if (updatedFullName.isNotEmpty) {
+        await context.read<AuthProvider>().updateUserSession(fullName: updatedFullName);
+      }
 
       if (!mounted) return;
 
@@ -157,8 +169,11 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                 label: 'First Name',
                 hintText: 'Enter your first name',
                 textInputAction: TextInputAction.next,
-                validator: (val) =>
-                    (val == null || val.trim().isEmpty) ? 'First name is required' : null,
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) return 'First name is required';
+                  if (val.trim().length > 50) return 'First name must be 50 characters or less';
+                  return null;
+                },
               ),
 
               const SizedBox(height: 14),
@@ -169,8 +184,11 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                 label: 'Last Name',
                 hintText: 'Enter your last name',
                 textInputAction: TextInputAction.next,
-                validator: (val) =>
-                    (val == null || val.trim().isEmpty) ? 'Last name is required' : null,
+                validator: (val) {
+                  if (val == null || val.trim().isEmpty) return 'Last name is required';
+                  if (val.trim().length > 50) return 'Last name must be 50 characters or less';
+                  return null;
+                },
               ),
 
               const SizedBox(height: 14),
@@ -183,6 +201,12 @@ class _EditProfileSheetState extends State<EditProfileSheet> {
                 keyboardType: TextInputType.phone,
                 textInputAction: TextInputAction.done,
                 prefixIcon: const Icon(Icons.phone_outlined, size: 18, color: OleenaTheme.textMuted),
+                validator: (val) {
+                  if (val != null && val.trim().length > 20) {
+                    return 'Phone number must be 20 characters or less';
+                  }
+                  return null;
+                },
               ),
 
               const SizedBox(height: 24),

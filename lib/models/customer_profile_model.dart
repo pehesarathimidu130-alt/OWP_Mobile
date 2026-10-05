@@ -1,3 +1,5 @@
+import '../core/app_config.dart';
+
 /// Model representing customer profile data returned by OWP Backend.
 class CustomerProfile {
   final int customerId;
@@ -10,6 +12,7 @@ class CustomerProfile {
   final DateTime? createdAt;
   final int favoritesCount;
   final int inquiriesCount;
+  final String? profilePhotoUrl;
 
   CustomerProfile({
     required this.customerId,
@@ -22,6 +25,7 @@ class CustomerProfile {
     this.createdAt,
     this.favoritesCount = 0,
     this.inquiriesCount = 0,
+    this.profilePhotoUrl,
   });
 
   /// User-friendly initials for avatar display
@@ -48,6 +52,21 @@ class CustomerProfile {
     return email.split('@').first;
   }
 
+  /// Resolves relative media paths against AppConfig.baseUrl
+  static String? resolveMediaUrl(String? rawUrl) {
+    if (rawUrl == null || rawUrl.trim().isEmpty) return null;
+    final trimmed = rawUrl.trim();
+    if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+      return trimmed;
+    }
+    final base = AppConfig.baseUrl.replaceAll('/api', '');
+    final path = trimmed.startsWith('/') ? trimmed : '/$trimmed';
+    return '$base$path';
+  }
+
+  /// Absolute URL for customer profile photo
+  String? get resolvedPhotoUrl => resolveMediaUrl(profilePhotoUrl);
+
   factory CustomerProfile.fromJson(Map<String, dynamic> json) {
     DateTime? parsedDate;
     if (json['createdAt'] != null) {
@@ -73,6 +92,7 @@ class CustomerProfile {
       inquiriesCount: json['inquiriesCount'] is int
           ? json['inquiriesCount']
           : int.tryParse(json['inquiriesCount']?.toString() ?? '0') ?? 0,
+      profilePhotoUrl: json['profilePhotoUrl']?.toString() ?? json['photoUrl']?.toString(),
     );
   }
 
@@ -87,6 +107,7 @@ class CustomerProfile {
         'createdAt': createdAt?.toIso8601String(),
         'favoritesCount': favoritesCount,
         'inquiriesCount': inquiriesCount,
+        'profilePhotoUrl': profilePhotoUrl,
       };
 
   CustomerProfile copyWith({
@@ -100,6 +121,7 @@ class CustomerProfile {
     DateTime? createdAt,
     int? favoritesCount,
     int? inquiriesCount,
+    String? profilePhotoUrl,
   }) {
     return CustomerProfile(
       customerId: customerId ?? this.customerId,
@@ -112,6 +134,7 @@ class CustomerProfile {
       createdAt: createdAt ?? this.createdAt,
       favoritesCount: favoritesCount ?? this.favoritesCount,
       inquiriesCount: inquiriesCount ?? this.inquiriesCount,
+      profilePhotoUrl: profilePhotoUrl ?? this.profilePhotoUrl,
     );
   }
 }
