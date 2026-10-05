@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
 import 'package:oleena/screens/details/vendor_details_screen.dart';
-import 'package:oleena/features/venue/widgets/full_screen_image_viewer.dart';
 import 'package:oleena/models/vendor.dart';
 import 'package:oleena/core/auth_provider.dart';
 import 'package:oleena/core/favorites_provider.dart';
@@ -32,6 +31,7 @@ class FakeAuthProvider extends ChangeNotifier implements AuthProvider {
   @override Future<void> login(String email, String password) async {}
   @override Future<void> logout() async {}
   @override Future<void> register(Map<String, dynamic> userData) async {}
+  @override Future<void> signInWithGoogle(String serverClientId) async {}
   @override Future<void> updateUserSession({String? fullName, String? email}) async {}
 }
 

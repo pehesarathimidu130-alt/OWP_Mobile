@@ -66,6 +66,13 @@ class TestAuthProvider extends ChangeNotifier implements AuthProvider {
   }
 
   @override
+  Future<void> signInWithGoogle(String serverClientId) async {
+    isAuthenticated = true;
+    token = 'test_google_token';
+    notifyListeners();
+  }
+
+  @override
   Future<void> updateUserSession({String? fullName, String? email}) async {
     if (fullName != null) this.fullName = fullName;
     if (email != null) this.email = email;

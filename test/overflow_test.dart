@@ -1,20 +1,12 @@
-import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:provider/provider.dart';
-import 'package:go_router/go_router.dart';
-import 'package:oleena/main.dart';
 import 'package:oleena/core/api_client.dart';
-import 'package:oleena/core/auth_provider.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:mockito/mockito.dart';
-import 'package:mockito/annotations.dart';
 
 // Mock ApiClient and SecureStorage
-class MockApiClient extends Mock implements ApiClient {
+class MockApiClient extends Fake implements ApiClient {
   @override
   Future<dynamic> get(String endpoint, {Map<String, dynamic>? queryParams}) async {
     // Return longest realistic strings
