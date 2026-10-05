@@ -9,6 +9,7 @@ import '../inquiries/send_inquiry_screen.dart';
 import 'vendor_details_screen.dart';
 import '../../features/venue/widgets/listing_category_details.dart';
 import '../../features/venue/widgets/full_screen_image_viewer.dart';
+import '../../features/venue/widgets/report_listing_button.dart';
 import '../../core/api_service.dart';
 
 /// Detailed view for a specific business service / package added by a vendor.
@@ -374,6 +375,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
 
                       // ── Vendor Profile Card (Moved to the end) ───────
                       _buildVendorCard(context, vendor),
+                      const ReportListingButton(),
                     ],
                   ),
                 ),

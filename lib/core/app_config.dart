@@ -14,7 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 class AppConfig {
   AppConfig._();
 
-  static const String _defaultDevIp = '192.168.1.2';
+  static const String _defaultDevIp = '  10.65.67.100';
   static const String _productionBaseUrl = 'https://api.oleena.lk';
 
   // ── SharedPreferences & Storage Keys ─────────────────────────────────────────
