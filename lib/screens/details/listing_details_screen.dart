@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/api_service.dart';
@@ -12,6 +12,11 @@ import '../inquiries/send_inquiry_screen.dart';
 import 'vendor_details_screen.dart';
 import '../../features/venue/widgets/listing_category_details.dart';
 import '../../features/venue/widgets/full_screen_image_viewer.dart';
+feature/flag-button
+import '../../features/venue/widgets/report_listing_button.dart';
+import '../../core/api_service.dart';
+=======
+dev
 
 /// Detailed view for a specific business service / package added by a vendor.
 class ListingDetailsScreen extends StatefulWidget {
@@ -163,13 +168,13 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
       backgroundColor: Colors.white,
       body: Stack(
         children: [
-          // ── Scrollable Body ─────────────────────────────────────────
+          // â”€â”€ Scrollable Body â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ── Hero / Image Carousel ────────────────────────────
+                // â”€â”€ Hero / Image Carousel â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 Stack(
                   children: [
                     SizedBox(
@@ -281,7 +286,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                   ],
                 ),
 
-                // ── Service Details Content ──────────────────────────
+                // â”€â”€ Service Details Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                 Padding(
                   padding: EdgeInsets.fromLTRB(20, 20, 20, bottomPad + 100),
                   child: Column(
@@ -345,7 +350,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                       ),
                       const SizedBox(height: 24),
 
-                      // ── Service Description ────────────────────────
+                      // â”€â”€ Service Description â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                       Text(
                         'About This Service',
                         style: GoogleFonts.playfairDisplay(
@@ -369,7 +374,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                       ),
                       const SizedBox(height: 24),
 
-                      // ── Specifications & Details ─────────────────
+                      // â”€â”€ Specifications & Details â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                       if (_isLoadingDetails)
                         const Padding(
                           padding: EdgeInsets.symmetric(vertical: 24),
@@ -381,7 +386,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
                         ListingCategoryDetailsWidget(listing: listing),
                       const SizedBox(height: 12),
 
-                      // ── Service Highlights ─────────────────────────
+                      // â”€â”€ Service Highlights â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
                       Text(
                         'Service Highlights',
                         style: GoogleFonts.playfairDisplay(
@@ -399,8 +404,13 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
 
                       // TODO(Vinu): credentials/trust section goes here.
 
-                      // ── Vendor Profile Card (Moved to the end) ───────
+                      // â”€â”€ Vendor Profile Card (Moved to the end) â”€â”€â”€â”€â”€â”€â”€
                       _buildVendorCard(context, vendor),
+                      ReportListingButton(
+                        listingId: listing.serviceId,
+                        vendorId: vendor.vendorId,
+                        listingTitle: listing.title,
+                      ),
                     ],
                   ),
                 ),
@@ -408,7 +418,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
             ),
           ),
 
-          // ── Top Navigation (Back & Heart) ──────────────────────────
+          // â”€â”€ Top Navigation (Back & Heart) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Positioned(
             top: MediaQuery.of(context).padding.top + 8,
             left: 16,
@@ -432,7 +442,7 @@ class _ListingDetailsScreenState extends State<ListingDetailsScreen>
             ),
           ),
 
-          // ── Bottom Floating Bar (Inquire / Contact) ────────────────
+          // â”€â”€ Bottom Floating Bar (Inquire / Contact) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
           Positioned(
             bottom: bottomPad + 16,
             left: 20,
@@ -741,3 +751,4 @@ class _RoundButton extends StatelessWidget {
     );
   }
 }
+

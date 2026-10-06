@@ -240,11 +240,12 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
               ),
 
               // ── Listing Specs & Parent Vendor Details ─────────────────────
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
                     Text(
                       widget.listing.title,
                       style: GoogleFonts.playfairDisplay(
@@ -319,6 +320,7 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
                   ],
                 ),
               ),
+              ), // Close Expanded
             ],
           ),
         ),
