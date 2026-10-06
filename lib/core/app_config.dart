@@ -13,15 +13,16 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Global API configuration for the OWP shared backend.
 ///
 /// Routing strategy:
-///   • Web (Chrome dev)      → http://localhost:5131/api
-///   • Android / iOS Device  → Auto-detects PC host IP over Wi-Fi / ADB reverse / SharedPreferences
-///   • Android Emulator      → http://10.0.2.2:5131/api
-///   • Production (Release)  → [productionBaseUrl]
+///   • Default (All platforms & environments) → https://owpbackend-production.up.railway.app/api
+///   • Manual / Offline Local Dev            → Overridable via setHostIp() or --dart-define=USE_LOCAL=true / --dart-define=DEV_IP=<ip>
 class AppConfig {
   AppConfig._();
 
+  /// Live Railway deployment backend domain & URL
+  static const String liveBackendDomain = 'owpbackend-production.up.railway.app';
+  static const String liveBackendUrl = 'https://owpbackend-production.up.railway.app';
   static const String _defaultDevIp = '192.168.1.6';
-  static const String _productionBaseUrl = 'https://api.oleena.lk';
+  static const String _productionBaseUrl = liveBackendUrl;
 
   /// Web Client ID for Google Sign-In. The backend expects this as the Audience.
   /// Replace this placeholder with the actual Web Client ID.
@@ -75,71 +76,79 @@ class AppConfig {
     }
   }
 
-  /// Returns the currently active development host IP or host name.
-  static String get currentHost => _resolvedHost ?? devHostIp;
+  /// Returns the currently active backend host domain or IP.
+  static String get currentHost => _resolvedHost ?? liveBackendDomain;
 
-  /// Returns the correct base URL for the current run environment.
+  /// Returns the correct base URL for the mobile application.
+  /// Defaults to the live Railway backend (https://owpbackend-production.up.railway.app/api)
+  /// instead of localhost or emulator loopback (10.0.2.2).
   static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:$backendPort/api';
+    // 1. Explicit build-time override via --dart-define=BASE_URL=<url>
+    const fromBaseUrl = String.fromEnvironment('BASE_URL');
+    if (fromBaseUrl.isNotEmpty) {
+      final trimmed = fromBaseUrl.trim();
+      return trimmed.endsWith('/api') ? trimmed : '$trimmed/api';
     }
 
-    if (kReleaseMode) {
-      return '$_productionBaseUrl/api';
+    // 2. Explicit local development requested via --dart-define=USE_LOCAL=true or DEV_IP
+    const bool useLocal = bool.fromEnvironment('USE_LOCAL', defaultValue: false);
+    const fromDevIp = String.fromEnvironment('DEV_IP');
+
+    if (useLocal || fromDevIp.isNotEmpty) {
+      if (fromDevIp.isNotEmpty) {
+        return 'http://$fromDevIp:$backendPort/api';
+      }
+      if (_resolvedHost != null && _resolvedHost!.isNotEmpty) {
+        return 'http://$_resolvedHost:$backendPort/api';
+      }
+      const bool useEmulator = bool.fromEnvironment('USE_EMULATOR', defaultValue: false);
+      if (useEmulator) {
+        return 'http://10.0.2.2:$backendPort/api';
+      }
+      return 'http://$devHostIp:$backendPort/api';
     }
 
-    // 1. If host was resolved by initialization, auto-discovery, or user override
+    // 3. User manual runtime host override (e.g., from developer settings modal or tests)
     if (_resolvedHost != null && _resolvedHost!.isNotEmpty) {
-      return 'http://$_resolvedHost:$backendPort/api';
+      final h = _resolvedHost!.trim();
+      if (h == liveBackendDomain || h.contains('railway.app')) {
+        return '$liveBackendUrl/api';
+      }
+      if (h.startsWith('http://') || h.startsWith('https://')) {
+        return h.endsWith('/api') ? h : '$h/api';
+      }
+      // If manually set to an IP address (e.g. 192.168.1.99 in unit tests or dev sheet)
+      return 'http://$h:$backendPort/api';
     }
 
-    // 2. Explicit compile-time environment flags
-    const fromEnv = String.fromEnvironment('DEV_IP');
-    if (fromEnv.isNotEmpty) {
-      return 'http://$fromEnv:$backendPort/api';
-    }
-
-    const bool useEmulator = bool.fromEnvironment(
-      'USE_EMULATOR',
-      defaultValue: false,
-    );
-    if (useEmulator) {
-      return 'http://10.0.2.2:$backendPort/api';
-    }
-
-    const bool useAdbReverse = bool.fromEnvironment(
-      'USE_ADB_REVERSE',
-      defaultValue: false,
-    );
-    if (useAdbReverse) {
-      return 'http://127.0.0.1:$backendPort/api';
-    }
-
-    // 3. Fallback to default host IP
-    return 'http://$devHostIp:$backendPort/api';
+    // 4. Default: Live Railway backend URL
+    return '$liveBackendUrl/api';
   }
 
   /// Initializes host configuration asynchronously.
-  ///
-  /// Priority:
-  ///   1. Build-time `DEV_IP`
-  ///   2. ADB Reverse loopback (127.0.0.1) if responsive
-  ///   3. Android Emulator (10.0.2.2) if responsive
-  ///   4. Cached IP in SharedPreferences if responsive
-  ///   5. Quick probe of default IP
-  ///   6. Wi-Fi Subnet Auto-Discovery (scans LAN for backend port 5131)
+  /// Points by default to the live Railway backend (https://owpbackend-production.up.railway.app/api).
+  /// Only performs local subnet / emulator discovery if explicitly requested via USE_LOCAL=true or DEV_IP.
   static Future<void> initialize() async {
     if (kIsWeb || kReleaseMode || _isInitializing) return;
     _isInitializing = true;
 
     try {
+      // Unless local dev is explicitly requested via --dart-define=USE_LOCAL=true or DEV_IP,
+      // mobile app connects directly to the live Railway backend.
+      const bool useLocal = bool.fromEnvironment('USE_LOCAL', defaultValue: false);
+      const fromDevIp = String.fromEnvironment('DEV_IP');
+
+      if (!useLocal && fromDevIp.isEmpty) {
+        debugPrint('[AppConfig] Connected to live Railway backend: $liveBackendUrl/api');
+        return;
+      }
+
       final port = int.tryParse(backendPort) ?? 5131;
 
       // 1. Check explicit compile-time flag
-      const fromEnv = String.fromEnvironment('DEV_IP');
-      if (fromEnv.isNotEmpty) {
-        _resolvedHost = fromEnv;
-        debugPrint('[AppConfig] Using build-time DEV_IP: $fromEnv');
+      if (fromDevIp.isNotEmpty) {
+        _resolvedHost = fromDevIp;
+        debugPrint('[AppConfig] Using build-time DEV_IP: $fromDevIp');
         return;
       }
 
