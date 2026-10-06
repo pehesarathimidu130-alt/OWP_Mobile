@@ -42,8 +42,8 @@ class _ReportListingButtonState extends State<ReportListingButton> {
   }
 
   Future<void> _checkIfAlreadyReported() async {
-    final auth = context.read<AuthProvider>();
-    if (!auth.isAuthenticated || auth.customerId == null) {
+    final auth = Provider.of<AuthProvider?>(context, listen: false);
+    if (auth == null || !auth.isAuthenticated || auth.customerId == null) {
       if (mounted) setState(() => _isChecking = false);
       return;
     }
@@ -73,7 +73,7 @@ class _ReportListingButtonState extends State<ReportListingButton> {
   }
 
   void _showReportSheet(BuildContext context) {
-    final auth = context.read<AuthProvider>();
+    final auth = Provider.of<AuthProvider?>(context, listen: false);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -82,7 +82,7 @@ class _ReportListingButtonState extends State<ReportListingButton> {
         listingId: widget.listingId,
         vendorId: widget.vendorId,
         listingTitle: widget.listingTitle,
-        reporterUserId: auth.customerId ?? 0,
+        reporterUserId: auth?.customerId ?? 0,
         onSuccess: () {
           if (mounted) setState(() => _hasReported = true);
         },

@@ -14,7 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 ///
 /// Routing strategy:
 ///   • Default (All platforms & environments) → https://owpbackend-production.up.railway.app/api
-///   • Manual / Offline Local Dev            → Overridable via setHostIp() or --dart-define=USE_LOCAL=true / --dart-define=DEV_IP=<ip>
+///   • Manual / Offline Local Dev            → Overridable via setHostIp() or `--dart-define=USE_LOCAL=true` / `--dart-define=DEV_IP=<ip>`
 class AppConfig {
   AppConfig._();
 
@@ -22,7 +22,6 @@ class AppConfig {
   static const String liveBackendDomain = 'owpbackend-production.up.railway.app';
   static const String liveBackendUrl = 'https://owpbackend-production.up.railway.app';
   static const String _defaultDevIp = '192.168.1.6';
-  static const String _productionBaseUrl = liveBackendUrl;
 
   /// Web Client ID for Google Sign-In. The backend expects this as the Audience.
   /// Replace this placeholder with the actual Web Client ID.

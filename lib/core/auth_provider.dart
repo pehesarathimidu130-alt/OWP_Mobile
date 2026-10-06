@@ -1,350 +1,329 @@
-import 'dart:async';
-import 'dart:io';
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'api_client.dart';
+import 'session_events.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
-import 'package:flutter/foundation.dart'
-    show
-        debugPrint,
-        defaultTargetPlatform,
-        kIsWeb,
-        kReleaseMode,
-        TargetPlatform;
-import 'package:shared_preferences/shared_preferences.dart';
+/// Provider managing authentication state, customer profile data, and JWT tokens.
+class AuthProvider extends ChangeNotifier {
+  final FlutterSecureStorage _storage;
+  final ApiClient _apiClient;
 
-/// Global API configuration for the OWP shared backend.
-///
-/// Routing strategy:
-///   • Web (Chrome dev)      → http://localhost:5131/api
-///   • Android / iOS Device  → Auto-detects PC host IP over Wi-Fi / ADB reverse / SharedPreferences
-///   • Android Emulator      → http://10.0.2.2:5131/api
-///   • Production (Release)  → [productionBaseUrl]
-class AppConfig {
-  AppConfig._();
+  bool _isLoading = false;
+  bool _isAuthenticated = false;
+  String? _token;
+  String? _fullName;
+  String? _email;
+  String? _role;
+  int? _customerId;
+  String? _profilePhotoUrl;
 
-  static const String _defaultDevIp = '192.168.1.6';
-  static const String _productionBaseUrl = 'https://api.oleena.lk';
+  AuthProvider({FlutterSecureStorage? storage, ApiClient? apiClient})
+      : _storage = storage ?? const FlutterSecureStorage(),
+        _apiClient = apiClient ?? ApiClient();
 
-  /// Web Client ID for Google Sign-In. The backend expects this as the Audience.
-  /// Replace this placeholder with the actual Web Client ID.
-  static const String googleWebClientId =
-      '800917200874-0vua6g9bauoaqtr6t4ah7t96vlkmte38.apps.googleusercontent.com';
+  bool get isLoading => _isLoading;
+  bool get isAuthenticated => _isAuthenticated;
+  String? get token => _token;
+  String? get fullName => _fullName;
+  String? get email => _email;
+  String? get role => _role;
+  int? get customerId => _customerId;
+  String? get profilePhotoUrl => _profilePhotoUrl;
 
-  // ── SharedPreferences & Storage Keys ─────────────────────────────────────────
-  static const String kHasSeenOnboarding = 'hasSeenOnboarding';
-  static const String kAuthToken = 'auth_token';
-  static const String kCachedDevIp = 'cached_dev_host_ip';
-
-  /// Dev switch to reset onboarding and session state on app launch (debug only).
-  /// Activated with `--dart-define=FRESH_START=true`.
-  static const bool freshStart = bool.fromEnvironment(
-    'FRESH_START',
-    defaultValue: false,
-  );
-
-  // ── Runtime Resolved State ──────────────────────────────────────────────────
-  static String? _resolvedHost;
-  static bool _isInitializing = false;
-
-  /// Backend port (ASP.NET Core Web API).
-  /// Overridable at run time via `--dart-define=PORT=<port>`.
-  static String get backendPort {
-    const fromEnv = String.fromEnvironment('PORT');
-    if (fromEnv.isNotEmpty) return fromEnv;
-    return '5131';
+  /// User-friendly display name (prioritizes fullName, then email prefix, then fallback)
+  String get displayName {
+    if (_fullName != null && _fullName!.trim().isNotEmpty) {
+      return _fullName!.trim();
+    }
+    if (_email != null && _email!.trim().isNotEmpty) {
+      return _email!.split('@').first;
+    }
+    return 'Oleena Member';
   }
 
-  /// Host machine IPv4 address for physical mobile device testing.
-  /// Overridable at run time via `--dart-define=DEV_IP=<ip>`.
-  static String get devHostIp {
-    if (_resolvedHost != null && _resolvedHost!.isNotEmpty) {
-      return _resolvedHost!;
+  /// Initials derived from display name (e.g. "Vinu Senarathne" -> "VS")
+  String get userInitials {
+    final name = displayName.trim();
+    if (name.isEmpty) return 'O';
+    final parts = name.split(RegExp(r'\s+'));
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
     }
-    const fromEnv = String.fromEnvironment('DEV_IP');
-    if (fromEnv.isNotEmpty) return fromEnv;
-    return _defaultDevIp;
+    return name[0].toUpperCase();
   }
 
-  /// Sets the host IP manually (e.g. from developer settings UI) and saves it.
-  static Future<void> setHostIp(String ip) async {
-    final cleanIp = ip.trim();
-    if (cleanIp.isNotEmpty) {
-      _resolvedHost = cleanIp;
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.setString(kCachedDevIp, cleanIp);
-      } catch (_) {}
-    }
-  }
-
-  /// Returns the currently active development host IP or host name.
-  static String get currentHost => _resolvedHost ?? devHostIp;
-
-  /// Returns the correct base URL for the current run environment.
-  static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://localhost:$backendPort/api';
-    }
-
-    if (kReleaseMode) {
-      return '$_productionBaseUrl/api';
-    }
-
-    // 1. If host was resolved by initialization, auto-discovery, or user override
-    if (_resolvedHost != null && _resolvedHost!.isNotEmpty) {
-      return 'http://$_resolvedHost:$backendPort/api';
-    }
-
-    // 2. Explicit compile-time environment flags
-    const fromEnv = String.fromEnvironment('DEV_IP');
-    if (fromEnv.isNotEmpty) {
-      return 'http://$fromEnv:$backendPort/api';
-    }
-
-    const bool useEmulator = bool.fromEnvironment(
-      'USE_EMULATOR',
-      defaultValue: false,
-    );
-    if (useEmulator) {
-      return 'http://10.0.2.2:$backendPort/api';
-    }
-
-    const bool useAdbReverse = bool.fromEnvironment(
-      'USE_ADB_REVERSE',
-      defaultValue: false,
-    );
-    if (useAdbReverse) {
-      return 'http://127.0.0.1:$backendPort/api';
-    }
-
-    // 3. Fallback to default host IP
-    return 'http://$devHostIp:$backendPort/api';
-  }
-
-  /// Initializes host configuration asynchronously.
-  ///
-  /// Priority:
-  ///   1. Build-time `DEV_IP`
-  ///   2. ADB Reverse loopback (127.0.0.1) if responsive
-  ///   3. Android Emulator (10.0.2.2) if responsive
-  ///   4. Cached IP in SharedPreferences if responsive
-  ///   5. Quick probe of default IP
-  ///   6. Wi-Fi Subnet Auto-Discovery (scans LAN for backend port 5131)
-  static Future<void> initialize() async {
-    if (kIsWeb || kReleaseMode || _isInitializing) return;
-    _isInitializing = true;
+  /// Checks whether a stored JWT token exists and restores session & user details.
+  Future<void> checkAuthStatus() async {
+    _isLoading = true;
+    notifyListeners();
 
     try {
-      final port = int.tryParse(backendPort) ?? 5131;
+      final storedToken = await _storage.read(key: 'auth_token');
+      if (storedToken != null && storedToken.isNotEmpty) {
+        _token = storedToken;
+        _isAuthenticated = true;
 
-      // 1. Check explicit compile-time flag
-      const fromEnv = String.fromEnvironment('DEV_IP');
-      if (fromEnv.isNotEmpty) {
-        _resolvedHost = fromEnv;
-        debugPrint('[AppConfig] Using build-time DEV_IP: $fromEnv');
-        return;
-      }
+        // Restore stored user metadata
+        _fullName = await _storage.read(key: 'user_full_name');
+        _email = await _storage.read(key: 'user_email');
+        _role = await _storage.read(key: 'user_role');
+        _profilePhotoUrl = await _storage.read(key: 'user_profile_photo');
+        final cidStr = await _storage.read(key: 'user_customer_id');
+        if (cidStr != null) _customerId = int.tryParse(cidStr);
 
-      // 2. Check if ADB reverse (127.0.0.1) is active and reachable
-      if (await _canConnect('127.0.0.1', port, timeoutMs: 200)) {
-        _resolvedHost = '127.0.0.1';
-        debugPrint('[AppConfig] Connected via ADB reverse (127.0.0.1:$port)');
-        return;
-      }
-
-      // 3. Check if Android emulator loopback (10.0.2.2) is reachable
-      if (defaultTargetPlatform == TargetPlatform.android) {
-        if (await _canConnect('10.0.2.2', port, timeoutMs: 200)) {
-          _resolvedHost = '10.0.2.2';
-          debugPrint(
-            '[AppConfig] Connected via Android Emulator (10.0.2.2:$port)',
-          );
-          return;
+        // If metadata is missing from storage, decode from JWT claims
+        if (_fullName == null || _email == null || _customerId == null) {
+          _extractFromJwt(storedToken);
         }
+      } else {
+        _token = null;
+        _isAuthenticated = false;
+        _fullName = null;
+        _email = null;
+        _role = null;
+        _customerId = null;
+        _profilePhotoUrl = null;
       }
-
-      // 4. Check cached IP from SharedPreferences
-      try {
-        final prefs = await SharedPreferences.getInstance();
-        final cached = prefs.getString(kCachedDevIp);
-        if (cached != null && cached.isNotEmpty) {
-          if (await _canConnect(cached, port, timeoutMs: 300)) {
-            _resolvedHost = cached;
-            debugPrint('[AppConfig] Connected via cached IP: $cached:$port');
-            return;
-          }
-        }
-      } catch (_) {}
-
-      // 5. Quick probe default IP
-      if (await _canConnect(_defaultDevIp, port, timeoutMs: 300)) {
-        _resolvedHost = _defaultDevIp;
-        debugPrint(
-          '[AppConfig] Connected via default LAN IP: $_defaultDevIp:$port',
-        );
-        return;
-      }
-
-      // 6. Subnet auto-discovery
-      final discovered = await autoDiscoverHost(timeoutMs: 400);
-      if (discovered != null) {
-        _resolvedHost = discovered;
-        debugPrint('[AppConfig] Auto-discovered backend at: $discovered:$port');
-        try {
-          final prefs = await SharedPreferences.getInstance();
-          await prefs.setString(kCachedDevIp, discovered);
-        } catch (_) {}
-      }
-    } catch (e) {
-      debugPrint('[AppConfig] Initialization warning: $e');
-    } finally {
-      _isInitializing = false;
-    }
-  }
-
-  /// Automatically discovers the backend host machine on the local Wi-Fi network
-  /// by probing candidate IPs in parallel on the backend port.
-  static Future<String?> autoDiscoverHost({int timeoutMs = 400}) async {
-    if (kIsWeb || kReleaseMode) return null;
-
-    try {
-      final port = int.tryParse(backendPort) ?? 5131;
-
-      // 1. Fast checks for loopback & emulator
-      if (await _canConnect('127.0.0.1', port, timeoutMs: 200)) {
-        return '127.0.0.1';
-      }
-      if (defaultTargetPlatform == TargetPlatform.android &&
-          await _canConnect('10.0.2.2', port, timeoutMs: 200)) {
-        return '10.0.2.2';
-      }
-
-      // 2. Discover local network interfaces on the mobile phone
-      final interfaces = await NetworkInterface.list(
-        type: InternetAddressType.IPv4,
-        includeLinkLocal: false,
-      );
-
-      final candidateIps = <String>{};
-
-      // Add common fallbacks
-      candidateIps.add(_defaultDevIp);
-
-      for (final iface in interfaces) {
-        for (final addr in iface.addresses) {
-          final ip = addr.address;
-          if (ip.startsWith('127.') || ip.startsWith('169.254.')) continue;
-          final parts = ip.split('.');
-          if (parts.length != 4) continue;
-          final prefix = '${parts[0]}.${parts[1]}.${parts[2]}.';
-          final myOctet = int.tryParse(parts[3]) ?? 0;
-
-          // Gateway and common developer host IPs first
-          candidateIps.add('${prefix}1');
-          candidateIps.add('${prefix}2');
-          candidateIps.add('${prefix}3');
-          candidateIps.add('${prefix}4');
-          candidateIps.add('${prefix}5');
-          candidateIps.add('${prefix}6');
-          candidateIps.add('${prefix}7');
-          candidateIps.add('${prefix}8');
-          candidateIps.add('${prefix}9');
-          candidateIps.add('${prefix}10');
-          candidateIps.add('${prefix}100');
-          candidateIps.add('${prefix}101');
-          candidateIps.add('${prefix}102');
-          candidateIps.add('${prefix}105');
-
-          // Nearby IPs around the mobile device's DHCP lease
-          for (int d = -5; d <= 5; d++) {
-            final targetOctet = myOctet + d;
-            if (targetOctet > 0 && targetOctet < 255) {
-              candidateIps.add('$prefix$targetOctet');
-            }
-          }
-
-          // Remaining subnet addresses (1..254)
-          for (int i = 1; i <= 254; i++) {
-            candidateIps.add('$prefix$i');
-          }
-        }
-      }
-
-      if (candidateIps.isEmpty) return null;
-
-      // Probe candidates in fast parallel batches
-      final candidateList = candidateIps.toList();
-
-      // Batch 1: High priority candidates (first 30)
-      final batch1 = candidateList.take(30).toList();
-      final win1 = await _probeBatch(batch1, port, timeoutMs: timeoutMs);
-      if (win1 != null) {
-        _resolvedHost = win1;
-        return win1;
-      }
-
-      // Batch 2: The rest of the subnet in chunks of 50
-      final rest = candidateList.skip(30).toList();
-      for (int i = 0; i < rest.length; i += 50) {
-        final end = (i + 50 > rest.length) ? rest.length : i + 50;
-        final chunk = rest.sublist(i, end);
-        final win = await _probeBatch(chunk, port, timeoutMs: timeoutMs);
-        if (win != null) {
-          _resolvedHost = win;
-          return win;
-        }
-      }
-    } catch (e) {
-      debugPrint('[AppConfig] Subnet scan failed: $e');
-    }
-    return null;
-  }
-
-  static Future<String?> _probeBatch(
-    List<String> ips,
-    int port, {
-    required int timeoutMs,
-  }) async {
-    if (ips.isEmpty) return null;
-    final completer = Completer<String?>();
-    int pending = ips.length;
-
-    for (final ip in ips) {
-      _canConnect(ip, port, timeoutMs: timeoutMs)
-          .then((ok) {
-            if (ok && !completer.isCompleted) {
-              completer.complete(ip);
-            } else {
-              pending--;
-              if (pending == 0 && !completer.isCompleted) {
-                completer.complete(null);
-              }
-            }
-          })
-          .catchError((_) {
-            pending--;
-            if (pending == 0 && !completer.isCompleted) {
-              completer.complete(null);
-            }
-          });
-    }
-
-    return completer.future;
-  }
-
-  static Future<bool> _canConnect(
-    String host,
-    int port, {
-    required int timeoutMs,
-  }) async {
-    try {
-      final socket = await Socket.connect(
-        host,
-        port,
-        timeout: Duration(milliseconds: timeoutMs),
-      );
-      socket.destroy();
-      return true;
     } catch (_) {
-      return false;
+      _token = null;
+      _isAuthenticated = false;
+      _fullName = null;
+      _email = null;
+      _role = null;
+      _customerId = null;
+      _profilePhotoUrl = null;
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
+  }
+
+  /// User login - extracts and persists user details from .NET backend response.
+  Future<void> login(String email, String password) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final response = await _apiClient.post('/auth/customer/login', body: {
+        'email': email,
+        'password': password,
+      });
+
+      if (response != null && response is Map<String, dynamic>) {
+        await _handleAuthSuccess(response, fallbackEmail: email);
+      }
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Initiates Google Sign-In and authenticates with the backend.
+  Future<void> signInWithGoogle(String serverClientId) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final googleSignIn = GoogleSignIn(serverClientId: serverClientId);
+      final GoogleSignInAccount? account = await googleSignIn.signIn();
+
+      if (account == null) {
+        // User canceled the sign-in flow.
+        throw Exception('CANCELED');
+      }
+
+      final GoogleSignInAuthentication auth = await account.authentication;
+      final String? idToken = auth.idToken;
+
+      if (idToken == null) {
+        throw Exception('Failed to obtain Google ID token.');
+      }
+
+      final response = await _apiClient.post('/auth/customer/google-login', body: {
+        'idToken': idToken,
+      });
+
+      if (response != null && response is Map<String, dynamic>) {
+        await _handleAuthSuccess(
+          response,
+          fallbackEmail: account.email,
+          fallbackName: account.displayName,
+          fallbackPhotoUrl: account.photoUrl,
+        );
+      }
+    } catch (e) {
+      if (e.toString().contains('CANCELED')) {
+        rethrow;
+      }
+      if (e is ApiException) {
+        rethrow; // pass backend errors (like different account type) directly
+      }
+      // Re-throw generic or PlatformException errors for UI to handle
+      throw Exception(e.toString());
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// User registration - extracts and persists user details from .NET backend response.
+  Future<void> register(Map<String, dynamic> userData) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      dynamic response;
+      try {
+        response = await _apiClient.post('/auth/register', body: userData);
+      } on ApiException catch (e) {
+        if (e.statusCode == 404) {
+          response = await _apiClient.post('/auth/customer/register', body: userData);
+        } else {
+          rethrow;
+        }
+      }
+
+      if (response != null && response is Map<String, dynamic>) {
+        await _handleAuthSuccess(
+          response,
+          fallbackName: userData['fullName'] ?? userData['name'],
+          fallbackEmail: userData['email'],
+        );
+      }
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Processes successful auth response, extracting token and user identity.
+  Future<void> _handleAuthSuccess(
+    Map<String, dynamic> response, {
+    String? fallbackName,
+    String? fallbackEmail,
+    String? fallbackPhotoUrl,
+  }) async {
+    final token = response['token']?.toString();
+    if (token != null && token.isNotEmpty) {
+      _token = token;
+      _isAuthenticated = true;
+      await _storage.write(key: 'auth_token', value: token);
+
+      // Extract fullName, email, role, customerId from response body
+      final name = response['fullName']?.toString() ??
+          response['name']?.toString() ??
+          fallbackName;
+      final email = response['email']?.toString() ?? fallbackEmail;
+      final role = response['role']?.toString() ?? 'Customer';
+      final customerId = response['customerId'];
+      final photoUrl = response['profilePhotoUrl']?.toString() ??
+          response['profilePictureUrl']?.toString() ??
+          response['photoUrl']?.toString() ??
+          fallbackPhotoUrl;
+
+      _fullName = name;
+      _email = email;
+      _role = role;
+      if (customerId is int) _customerId = customerId;
+      _profilePhotoUrl = photoUrl;
+
+      // Also parse token claims if still missing
+      if (_fullName == null || _email == null || _customerId == null) {
+        _extractFromJwt(token);
+      }
+
+      // Persist user profile fields
+      if (_fullName != null) {
+        await _storage.write(key: 'user_full_name', value: _fullName!);
+      }
+      if (_email != null) {
+        await _storage.write(key: 'user_email', value: _email!);
+      }
+      if (_role != null) {
+        await _storage.write(key: 'user_role', value: _role!);
+      }
+      if (_customerId != null) {
+        await _storage.write(key: 'user_customer_id', value: _customerId.toString());
+      }
+      if (_profilePhotoUrl != null && _profilePhotoUrl!.isNotEmpty) {
+        await _storage.write(key: 'user_profile_photo', value: _profilePhotoUrl!);
+      }
+
+      // Reset unauthorized guard on successful authentication
+      SessionEvents.resetUnauthorizedGuard();
+    }
+  }
+
+  /// Decodes payload claims from JWT token as fallback.
+  void _extractFromJwt(String jwtToken) {
+    try {
+      final parts = jwtToken.split('.');
+      if (parts.length != 3) return;
+      final normalized = base64Url.normalize(parts[1]);
+      final decodedJson = utf8.decode(base64Url.decode(normalized));
+      final claims = jsonDecode(decodedJson) as Map<String, dynamic>?;
+
+      if (claims != null) {
+        _fullName ??= claims['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name']?.toString() ??
+            claims['name']?.toString() ??
+            claims['fullName']?.toString();
+
+        _email ??= claims['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress']?.toString() ??
+            claims['email']?.toString();
+
+        _role ??= claims['http://schemas.microsoft.com/ws/2008/06/identity/claims/role']?.toString() ??
+            claims['role']?.toString();
+
+        if (_customerId == null) {
+          final idClaim = claims['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier']?.toString() ??
+              claims['nameid']?.toString() ??
+              claims['id']?.toString() ??
+              claims['userId']?.toString() ??
+              claims['customerId']?.toString();
+          if (idClaim != null) _customerId = int.tryParse(idClaim);
+        }
+      }
+    } catch (_) {
+      // Ignored if malformed
+    }
+  }
+
+  /// Updates session display details (e.g. after customer edits their profile)
+  Future<void> updateUserSession({String? fullName, String? email}) async {
+    if (fullName != null && fullName.trim().isNotEmpty) {
+      _fullName = fullName.trim();
+      await _storage.write(key: 'user_full_name', value: _fullName!);
+    }
+    if (email != null && email.trim().isNotEmpty) {
+      _email = email.trim();
+      await _storage.write(key: 'user_email', value: _email!);
+    }
+    notifyListeners();
+  }
+
+  /// Logs out the user and clears stored credentials.
+  Future<void> logout() async {
+    await _storage.delete(key: 'auth_token');
+    await _storage.delete(key: 'user_full_name');
+    await _storage.delete(key: 'user_email');
+    await _storage.delete(key: 'user_role');
+    await _storage.delete(key: 'user_customer_id');
+    await _storage.delete(key: 'user_profile_photo');
+
+    try {
+      final googleSignIn = GoogleSignIn();
+      await googleSignIn.signOut();
+    } catch (_) {}
+
+    _token = null;
+    _fullName = null;
+    _email = null;
+    _role = null;
+    _customerId = null;
+    _profilePhotoUrl = null;
+    _isAuthenticated = false;
+    notifyListeners();
   }
 }
