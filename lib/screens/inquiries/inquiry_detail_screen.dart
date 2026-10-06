@@ -296,6 +296,8 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                                         message: msgCtrl.text.trim(),
                                         attachmentUrl: _inquiry.attachmentUrl,
                                         status: _inquiry.status,
+                                        vendorReply: _inquiry.vendorReply,
+                                        repliedAt: _inquiry.repliedAt,
                                         createdAt: _inquiry.createdAt,
                                       );
                                     });
@@ -470,6 +472,124 @@ class _InquiryDetailScreenState extends State<InquiryDetailScreen> {
                   ],
                 ),
               ),
+
+              // ── Vendor Response Card (Visible when Replied or Reply Present) ──
+              if (_inquiry.isReplied || _inquiry.hasVendorReply) ...[
+                const SizedBox(height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Vendor Response',
+                      style: GoogleFonts.playfairDisplay(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: OleenaTheme.textDark,
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE8F5E9),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFC8E6C9)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.check_circle_rounded, size: 14, color: Color(0xFF2E7D32)),
+                          const SizedBox(width: 4),
+                          Text(
+                            _inquiry.formattedRepliedDate.isNotEmpty
+                                ? 'Replied ${_inquiry.formattedRepliedDate}'
+                                : 'Replied',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: const Color(0xFF2E7D32),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: const Color(0xFFA5D6A7), width: 1.5),
+                    boxShadow: [
+                      BoxShadow(
+                        color: const Color(0xFF2E7D32).withValues(alpha: 0.06),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFE8F5E9),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.mark_email_read_rounded,
+                              size: 18,
+                              color: Color(0xFF2E7D32),
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Message from ${_inquiry.vendorName}',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: OleenaTheme.textDark,
+                                  ),
+                                ),
+                                if (_inquiry.formattedRepliedDate.isNotEmpty)
+                                  Text(
+                                    'Received ${_inquiry.formattedRepliedDate}',
+                                    style: GoogleFonts.poppins(
+                                      fontSize: 11,
+                                      color: OleenaTheme.textMuted,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+                      const Divider(height: 1, color: Color(0xFFE0E0E0)),
+                      const SizedBox(height: 14),
+                      Text(
+                        _inquiry.hasVendorReply
+                            ? _inquiry.vendorReply!
+                            : 'The vendor has acknowledged and replied to your inquiry.',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          color: OleenaTheme.textDark,
+                          height: 1.6,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
 
               const SizedBox(height: 20),
 

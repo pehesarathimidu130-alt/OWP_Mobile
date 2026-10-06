@@ -663,6 +663,37 @@ class _MyInquiriesScreenState extends State<MyInquiriesScreen> {
                   ],
                 ),
 
+                if (inquiry.hasVendorReply) ...[
+                  const SizedBox(height: 10),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFC8E6C9)),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.reply_rounded, size: 14, color: Color(0xFF2E7D32)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Vendor Reply: "${inquiry.vendorReply!}"',
+                            style: GoogleFonts.poppins(
+                              fontSize: 11,
+                              color: const Color(0xFF1B5E20),
+                              fontWeight: FontWeight.w500,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 const SizedBox(height: 12),
                 const Divider(height: 1, color: Color(0xFFF0EAE1)),
                 const SizedBox(height: 10),
