@@ -127,35 +127,49 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final email = _emailController.text.trim();
 
     try {
-      try {
-        await _apiClient.post(
-          '/auth/customer/forgot-password',
-          body: {'email': email},
-        );
-      } on ApiException catch (e) {
-        // Fallback for development if backend endpoint is not yet deployed (404)
-        if (e.statusCode == 404) {
-          // Simulated mock behavior in dev mode
-          await Future.delayed(const Duration(milliseconds: 600));
-        } else {
-          rethrow;
-        }
-      }
+      final response = await _apiClient.post(
+        '/auth/customer/forgot-password',
+        body: {'email': email},
+      );
 
       if (!mounted) return;
 
+      String? debugCode;
+      if (response is Map<String, dynamic> && response['debugCode'] != null) {
+        debugCode = response['debugCode']?.toString();
+      }
+
       setState(() {
         _currentStep = 2;
-        _codeController.clear();
-        _successMessage = 'A verification code has been sent to $email';
+        if (debugCode != null && debugCode.isNotEmpty) {
+          _codeController.text = debugCode;
+          _successMessage = 'Dev Mode: Verification code $debugCode auto-filled (SMTP credentials unconfigured on backend).';
+        } else {
+          _codeController.clear();
+          _successMessage = 'A verification code has been sent to $email';
+        }
       });
       _startResendTimer();
     } on ApiException catch (e) {
       if (!mounted) return;
       setState(() => _errorMessage = e.message);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.message),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } catch (_) {
       if (!mounted) return;
       setState(() => _errorMessage = 'Unable to send reset code. Please check your connection.');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Unable to send reset code. Please check your connection.'),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -177,23 +191,14 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     final newPassword = _newPasswordController.text;
 
     try {
-      try {
-        await _apiClient.post(
-          '/auth/customer/reset-password',
-          body: {
-            'email': email,
-            'token': code,
-            'newPassword': newPassword,
-          },
-        );
-      } on ApiException catch (e) {
-        // Fallback for development if backend endpoint is not yet deployed (404)
-        if (e.statusCode == 404) {
-          await Future.delayed(const Duration(milliseconds: 600));
-        } else {
-          rethrow;
-        }
-      }
+      await _apiClient.post(
+        '/auth/customer/reset-password',
+        body: {
+          'email': email,
+          'token': code,
+          'newPassword': newPassword,
+        },
+      );
 
       if (!mounted) return;
 
@@ -434,8 +439,9 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 const SizedBox(height: 24),
 
                 // Back to Login Prompt
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
+                Wrap(
+                  alignment: WrapAlignment.center,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     Text(
                       'Remember your password?',

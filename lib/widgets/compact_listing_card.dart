@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../core/auth_gate.dart';
 import '../core/auth_provider.dart';
 import '../core/favorites_provider.dart';
 import '../core/theme.dart';
 import '../models/listing_model.dart';
 import '../screens/details/listing_details_screen.dart';
+import 'ensure_logged_in.dart';
 
 /// A compact, 2-column grid listing card with integrated Auth-Gated favorite toggle.
 class CompactListingCard extends StatefulWidget {
@@ -53,15 +53,11 @@ class _CompactListingCardState extends State<CompactListingCard>
     final favProvider = context.read<FavoritesProvider>();
 
     if (!authProvider.isAuthenticated) {
-      await requireLogin(
+      final ok = await ensureLoggedIn(
         context,
-        reason: 'Sign in to save ${widget.listing.title} to your favourites',
-        icon: Icons.favorite_border_rounded,
-        onSuccess: () {
-          _handleFavoriteTap();
-        },
+        message: 'You need to register or log in to save favourites.',
       );
-      return;
+      if (!ok || !mounted) return;
     }
 
     if (_isToggling) return;
@@ -71,6 +67,7 @@ class _CompactListingCardState extends State<CompactListingCard>
 
     try {
       final finalState = await favProvider.toggleFavorite(widget.listing);
+      await favProvider.fetchFavorites();
       widget.listing.isFavorite = finalState;
       widget.onFavoriteChanged?.call(finalState);
 
@@ -286,11 +283,15 @@ class _CompactListingCardState extends State<CompactListingCard>
                             color: OleenaTheme.textDark,
                           ),
                         ),
-                        Text(
-                          ' (${widget.listing.vendor.reviewCount})',
-                          style: GoogleFonts.poppins(
-                            fontSize: 10,
-                            color: OleenaTheme.textMuted,
+                        Flexible(
+                          child: Text(
+                            ' (${widget.listing.vendor.reviewCount})',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              color: OleenaTheme.textMuted,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ],

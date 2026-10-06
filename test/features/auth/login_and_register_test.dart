@@ -22,6 +22,8 @@ class MockAuthProvider extends ChangeNotifier implements AuthProvider {
   @override
   int? customerId;
   @override
+  String? profilePhotoUrl;
+  @override
   String get displayName => fullName ?? 'Oleena Member';
   @override
   String get userInitials => 'OM';
@@ -48,6 +50,9 @@ class MockAuthProvider extends ChangeNotifier implements AuthProvider {
 
   @override
   Future<void> logout() async {}
+
+  @override
+  Future<void> signInWithGoogle(String serverClientId) async {}
 
   @override
   Future<void> updateUserSession({String? fullName, String? email}) async {
@@ -180,6 +185,10 @@ void main() {
 
     testWidgets('navigates to /register when clicked',
         (WidgetTester tester) async {
+      tester.view.physicalSize = const Size(1080, 2400);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(() => tester.view.resetPhysicalSize());
+
       await tester.pumpWidget(buildTestableWidget(const LoginScreen()));
 
       await tester.tap(find.text('Register'));

@@ -5,16 +5,24 @@ import 'package:provider/provider.dart';
 import '../../core/auth_provider.dart';
 import '../../core/favorites_provider.dart';
 import '../../core/theme.dart';
+import '../../models/customer_profile_model.dart';
 import '../../features/profile/providers/customer_profile_provider.dart';
+import '../../features/profile/providers/notification_preferences_provider.dart';
 import '../../features/profile/widgets/change_password_dialog.dart';
 import '../../features/profile/widgets/edit_profile_sheet.dart';
 import '../../features/profile/widgets/notification_preferences_card.dart';
+import '../../features/profile/widgets/profile_photo_sheet.dart';
 
 /// Customer Profile Screen displaying account details, statistics, and profile management actions.
 ///
 /// Handles all four states: Loading, Error, Empty (Guest), and Success.
 class ProfileScreen extends StatefulWidget {
-  const ProfileScreen({super.key});
+  final bool isActive;
+
+  const ProfileScreen({
+    super.key,
+    this.isActive = false,
+  });
 
   @override
   State<ProfileScreen> createState() => _ProfileScreenState();
@@ -24,15 +32,30 @@ class _ProfileScreenState extends State<ProfileScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadProfile();
-    });
+    if (widget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadProfile();
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadProfile();
+      });
+    }
   }
 
   void _loadProfile() {
+    if (!mounted) return;
     final authProvider = context.read<AuthProvider>();
     if (authProvider.isAuthenticated) {
       context.read<CustomerProfileProvider>().fetchProfile();
+      final notifPrefs = Provider.of<NotificationPreferencesProvider?>(context, listen: false);
+      notifPrefs?.fetchPreferences();
     }
   }
 
@@ -75,7 +98,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
           color: OleenaTheme.primary,
           onRefresh: () async {
             if (isAuthenticated) {
-              await context.read<CustomerProfileProvider>().fetchProfile();
+              final notifPrefs = Provider.of<NotificationPreferencesProvider?>(context, listen: false);
+              await Future.wait([
+                context.read<CustomerProfileProvider>().fetchProfile(),
+                if (notifPrefs != null) notifPrefs.fetchPreferences(),
+              ]);
             }
           },
           child: SingleChildScrollView(
@@ -186,6 +213,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         if (context.mounted) {
                           context.read<FavoritesProvider>().clear();
                           context.read<CustomerProfileProvider>().clear();
+                          context.go('/home');
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Logged out successfully.'),
@@ -221,6 +249,45 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Widget _buildAvatarContent(String initials, String? photoUrl, bool isAuthenticated) {
+    final monogram = Center(
+      child: isAuthenticated
+          ? Text(
+              initials,
+              style: GoogleFonts.poppins(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                color: OleenaTheme.primary,
+              ),
+            )
+          : const Icon(
+              Icons.person_outline_rounded,
+              size: 34,
+              color: OleenaTheme.primary,
+            ),
+    );
+
+    final resolvedUrl = CustomerProfile.resolveMediaUrl(photoUrl) ?? photoUrl;
+
+    if (!isAuthenticated || resolvedUrl == null || resolvedUrl.trim().isEmpty) {
+      return monogram;
+    }
+
+    return ClipOval(
+      child: Image.network(
+        resolvedUrl,
+        width: 68,
+        height: 68,
+        fit: BoxFit.cover,
+        errorBuilder: (context, error, stackTrace) => monogram,
+        loadingBuilder: (context, child, loadingProgress) {
+          if (loadingProgress == null) return child;
+          return monogram;
+        },
+      ),
+    );
+  }
+
   /// Profile Header Card showing avatar initials, name, and email
   Widget _buildHeaderCard(
     BuildContext context,
@@ -247,19 +314,36 @@ class _ProfileScreenState extends State<ProfileScreen> {
       ),
       child: Row(
         children: [
-          // Avatar monogram initials display — tappable to show "Photo upload coming soon"
+          // Avatar display with photo/monogram fallback
           GestureDetector(
             onTap: isAuthenticated
                 ? () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Photo upload coming soon',
-                          style: GoogleFonts.poppins(fontSize: 13),
-                        ),
-                        behavior: SnackBarBehavior.floating,
-                        backgroundColor: OleenaTheme.textDark,
-                      ),
+                    ProfilePhotoSheet.show(
+                      context,
+                      onPhotoSelected: (file) async {
+                        try {
+                          await context
+                              .read<CustomerProfileProvider>()
+                              .uploadProfilePhoto(file);
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text('Profile photo updated successfully.'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Failed to upload photo: $e'),
+                                behavior: SnackBarBehavior.floating,
+                              ),
+                            );
+                          }
+                        }
+                      },
                     );
                   }
                 : null,
@@ -272,21 +356,12 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     color: OleenaTheme.primaryTint,
                     shape: BoxShape.circle,
                   ),
-                  child: Center(
-                    child: isAuthenticated
-                        ? Text(
-                            initials,
-                            style: GoogleFonts.poppins(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w700,
-                              color: OleenaTheme.primary,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.person_outline_rounded,
-                            size: 34,
-                            color: OleenaTheme.primary,
-                          ),
+                  child: _buildAvatarContent(
+                    initials,
+                    (profile is CustomerProfile && profile.resolvedPhotoUrl != null && profile.resolvedPhotoUrl!.isNotEmpty)
+                        ? profile.resolvedPhotoUrl
+                        : auth.profilePhotoUrl,
+                    isAuthenticated,
                   ),
                 ),
                 if (isAuthenticated)
@@ -336,31 +411,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
-                if (isAuthenticated) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: OleenaTheme.primaryTint,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Icon(Icons.verified_rounded, size: 13, color: OleenaTheme.primary),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Customer Member',
-                          style: GoogleFonts.poppins(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: OleenaTheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
               ],
             ),
           ),
@@ -454,12 +504,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
             value: (profile.phoneNumber != null && profile.phoneNumber!.isNotEmpty)
                 ? profile.phoneNumber!
                 : 'Not provided',
-          ),
-          const Divider(height: 18),
-          _InfoRow(
-            label: 'Email Status',
-            value: 'Verified Account',
-            valueColor: const Color(0xFF2E7D32),
           ),
         ],
       ),
@@ -601,12 +645,17 @@ class _InfoRow extends StatelessWidget {
           label,
           style: GoogleFonts.poppins(fontSize: 13, color: OleenaTheme.textMuted),
         ),
-        Text(
-          value,
-          style: GoogleFonts.poppins(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: valueColor ?? OleenaTheme.textDark,
+        Expanded(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.poppins(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: valueColor ?? OleenaTheme.textDark,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ),
       ],

@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -193,8 +193,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
-    // Placeholder text must appear after push navigation.
-    expect(find.text('AI Chat - coming next'), findsOneWidget);
+    // AiChatScreen must appear after push navigation.
+    expect(find.byType(AiChatScreen), findsOneWidget);
   });
 
   testWidgets('(c) Tapping each of the 4 tabs switches tabs correctly',

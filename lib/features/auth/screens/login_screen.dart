@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/api_client.dart';
+import '../../../core/app_config.dart';
+import '../../../core/auth_coordinator.dart';
 import '../../../core/auth_provider.dart';
 import '../../../core/theme.dart';
 import '../../../widgets/app_text_field.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -23,9 +26,16 @@ class _LoginScreenState extends State<LoginScreen> {
   AutovalidateMode _autovalidateMode = AutovalidateMode.disabled;
 
   @override
+  void initState() {
+    super.initState();
+    AuthCoordinator.screenMounted();
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    AuthCoordinator.screenUnmounted();
     super.dispose();
   }
 
@@ -66,7 +76,7 @@ class _LoginScreenState extends State<LoginScreen> {
           );
 
       if (!mounted) return;
-      context.go('/home');
+      AuthCoordinator.notifySuccess(context);
     } on UnimplementedError {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -90,6 +100,55 @@ class _LoginScreenState extends State<LoginScreen> {
         const SnackBar(
           content: Text('Something went wrong. Please try again.'),
           behavior: SnackBarBehavior.floating,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _handleGoogleSignIn() async {
+    setState(() {
+      _isSubmitting = true;
+    });
+
+    try {
+      await context.read<AuthProvider>().signInWithGoogle(AppConfig.googleWebClientId);
+      
+      if (!mounted) return;
+      AuthCoordinator.notifySuccess(context);
+    } catch (e) {
+      if (!mounted) return;
+      if (e.toString().contains('CANCELED')) return;
+      
+      String errorMessage;
+      bool showRetry = false;
+      
+      if (e is ApiException) {
+        errorMessage = e.message;
+      } else if (e.toString().contains('ApiException: 10') || e.toString().contains('sign_in_failed')) {
+        errorMessage = 'Google sign-in is not set up for this build.';
+      } else {
+        errorMessage = 'Network error or Google Sign-In failed.';
+        showRetry = true;
+      }
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMessage),
+          backgroundColor: Colors.red.shade700,
+          behavior: SnackBarBehavior.floating,
+          action: showRetry
+              ? SnackBarAction(
+                  label: 'Retry',
+                  textColor: Colors.white,
+                  onPressed: _handleGoogleSignIn,
+                )
+              : null,
         ),
       );
     } finally {
@@ -344,9 +403,47 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         const SizedBox(height: 18),
 
+                        // Google Sign-In Button
+                        SizedBox(
+                          height: 52,
+                          child: OutlinedButton(
+                            onPressed: _isSubmitting ? null : _handleGoogleSignIn,
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: OleenaTheme.textDark,
+                              side: const BorderSide(color: OleenaTheme.borderSubtle, width: 1.5),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: OleenaTheme.buttonBorderRadius,
+                              ),
+                            ),
+                            child: _isSubmitting
+                                ? const SizedBox(
+                                    width: 22,
+                                    height: 22,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2.2,
+                                      color: OleenaTheme.primary,
+                                    ),
+                                  )
+                                : Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        'Continue with Google',
+                                        style: OleenaTheme.body.copyWith(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+
+                        const SizedBox(height: 24),
+
                         // Register Navigation Link
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        Wrap(
+                          alignment: WrapAlignment.center,
+                          crossAxisAlignment: WrapCrossAlignment.center,
                           children: [
                             Text(
                               "Don't have an account? ",
@@ -355,7 +452,18 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                             ),
                             GestureDetector(
-                              onTap: () => context.go('/register'),
+                              onTap: () {
+                                if (AuthCoordinator.isFlowActive) {
+                                  Navigator.of(context).pushReplacement(
+                                    MaterialPageRoute(
+                                      settings: const RouteSettings(name: 'auth_register'),
+                                      builder: (_) => const RegisterScreen(),
+                                    ),
+                                  );
+                                } else {
+                                  context.go('/register');
+                                }
+                              },
                               child: Text(
                                 'Register',
                                 style: OleenaTheme.body.copyWith(

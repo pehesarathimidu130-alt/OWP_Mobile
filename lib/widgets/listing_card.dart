@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
-import '../core/auth_gate.dart';
 import '../core/auth_provider.dart';
 import '../core/favorites_provider.dart';
 import '../core/theme.dart';
 import '../models/listing_model.dart';
 import '../screens/details/listing_details_screen.dart';
+import 'ensure_logged_in.dart';
 
 /// A reusable, premium Listing Card component with integrated Auth-Gated,
 /// optimistically updated Heart / Favorite button.
@@ -54,15 +54,11 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
 
     // 1. Auth Gate: Check if user is authenticated
     if (!authProvider.isAuthenticated) {
-      await requireLogin(
+      final ok = await ensureLoggedIn(
         context,
-        reason: 'Sign in to save ${widget.listing.title} to your favourites',
-        icon: Icons.favorite_border_rounded,
-        onSuccess: () {
-          _handleFavoriteTap();
-        },
+        message: 'You need to register or log in to save favourites.',
       );
-      return;
+      if (!ok || !mounted) return;
     }
 
     if (_isToggling) return;
@@ -74,6 +70,7 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
     try {
       // 2. Optimistic UI Update & Background Sync via Provider
       final finalState = await favProvider.toggleFavorite(widget.listing);
+      await favProvider.fetchFavorites();
       widget.listing.isFavorite = finalState;
       widget.onFavoriteChanged?.call(finalState);
 
@@ -292,12 +289,16 @@ class _ListingCardState extends State<ListingCard> with SingleTickerProviderStat
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          widget.listing.formattedPrice,
-                          style: GoogleFonts.poppins(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
-                            color: OleenaTheme.primary,
+                        Flexible(
+                          child: Text(
+                            widget.listing.formattedPrice,
+                            style: GoogleFonts.poppins(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: OleenaTheme.primary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                         Row(

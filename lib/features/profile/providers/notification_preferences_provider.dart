@@ -1,108 +1,95 @@
 import 'package:flutter/foundation.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/api_client.dart';
 
-/// Manages customer notification preference toggles.
+/// Manages customer notification preference toggles connected to the backend.
 ///
-/// All values are persisted locally with [SharedPreferences].
-/// Keys follow the convention `notif_<name>` to avoid collisions with
-/// other features that also use shared_preferences.
+/// Optimistic toggle updates with rollback on failure.
 class NotificationPreferencesProvider extends ChangeNotifier {
-  static const _kNewOffers = 'notif_new_offers';
-  static const _kInquiryUpdates = 'notif_inquiry_updates';
-  static const _kWeddingReminders = 'notif_wedding_reminders';
-  static const _kWeeklyDigest = 'notif_weekly_digest';
-  static const _kPromotions = 'notif_promotions';
+  final ApiClient _apiClient;
 
-  bool _newOffers = true;
   bool _inquiryUpdates = true;
-  bool _weddingReminders = true;
-  bool _weeklyDigest = false;
-  bool _promotions = false;
+  bool _priceChanges = true;
+  bool _isLoading = false;
+  String? _errorMessage;
 
-  bool get newOffers => _newOffers;
   bool get inquiryUpdates => _inquiryUpdates;
-  bool get weddingReminders => _weddingReminders;
-  bool get weeklyDigest => _weeklyDigest;
-  bool get promotions => _promotions;
+  bool get priceChanges => _priceChanges;
+  bool get isLoading => _isLoading;
+  String? get errorMessage => _errorMessage;
 
-  NotificationPreferencesProvider() {
-    _loadPreferences();
-  }
+  NotificationPreferencesProvider({ApiClient? apiClient})
+      : _apiClient = apiClient ?? ApiClient();
 
-  /// Reads stored preferences from disk on startup.
-  Future<void> _loadPreferences() async {
+  /// Fetches preferences from GET /api/customer/notification-preferences.
+  Future<void> fetchPreferences() async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
     try {
-      final prefs = await SharedPreferences.getInstance();
-      _newOffers = prefs.getBool(_kNewOffers) ?? true;
-      _inquiryUpdates = prefs.getBool(_kInquiryUpdates) ?? true;
-      _weddingReminders = prefs.getBool(_kWeddingReminders) ?? true;
-      _weeklyDigest = prefs.getBool(_kWeeklyDigest) ?? false;
-      _promotions = prefs.getBool(_kPromotions) ?? false;
-      notifyListeners();
+      final response = await _apiClient.get('/customer/notification-preferences');
+      if (response != null && response is Map<String, dynamic>) {
+        _inquiryUpdates = response['inquiryUpdates'] == true || response['inquiryUpdates'] == null;
+        _priceChanges = response['priceChanges'] == true || response['priceChanges'] == null;
+      }
+    } on ApiException catch (e) {
+      _errorMessage = e.message;
     } catch (_) {
-      // Fail silently — preferences are non-critical
+      _errorMessage = 'Could not load notification preferences.';
+    } finally {
+      _isLoading = false;
+      notifyListeners();
     }
   }
 
-  /// Toggles the New Offers notification and persists the value.
-  Future<void> toggleNewOffers(bool value) async {
-    _newOffers = value;
-    notifyListeners();
-    await _save(_kNewOffers, value);
-  }
-
-  /// Toggles the Inquiry Updates notification and persists the value.
+  /// Toggles the Inquiry Updates notification preference optimistically.
   Future<void> toggleInquiryUpdates(bool value) async {
+    final previous = _inquiryUpdates;
     _inquiryUpdates = value;
     notifyListeners();
-    await _save(_kInquiryUpdates, value);
-  }
 
-  /// Toggles the Wedding Reminders notification and persists the value.
-  Future<void> toggleWeddingReminders(bool value) async {
-    _weddingReminders = value;
-    notifyListeners();
-    await _save(_kWeddingReminders, value);
-  }
-
-  /// Toggles the Weekly Digest notification and persists the value.
-  Future<void> toggleWeeklyDigest(bool value) async {
-    _weeklyDigest = value;
-    notifyListeners();
-    await _save(_kWeeklyDigest, value);
-  }
-
-  /// Toggles the Promotions notification and persists the value.
-  Future<void> togglePromotions(bool value) async {
-    _promotions = value;
-    notifyListeners();
-    await _save(_kPromotions, value);
-  }
-
-  Future<void> _save(String key, bool value) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(key, value);
-    } catch (_) {
-      // Fail silently
+      await _apiClient.put(
+        '/customer/notification-preferences',
+        body: {
+          'inquiryUpdates': value,
+          'priceChanges': _priceChanges,
+        },
+      );
+    } catch (e) {
+      _inquiryUpdates = previous;
+      notifyListeners();
+      rethrow;
     }
   }
 
-  /// Resets all preferences to defaults (called on sign-out if needed).
-  Future<void> resetAll() async {
-    _newOffers = true;
-    _inquiryUpdates = true;
-    _weddingReminders = true;
-    _weeklyDigest = false;
-    _promotions = false;
+  /// Toggles the Favourite Price Changes notification preference optimistically.
+  Future<void> togglePriceChanges(bool value) async {
+    final previous = _priceChanges;
+    _priceChanges = value;
     notifyListeners();
+
     try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove(_kNewOffers);
-      await prefs.remove(_kInquiryUpdates);
-      await prefs.remove(_kWeddingReminders);
-      await prefs.remove(_kWeeklyDigest);
-      await prefs.remove(_kPromotions);
-    } catch (_) {}
+      await _apiClient.put(
+        '/customer/notification-preferences',
+        body: {
+          'inquiryUpdates': _inquiryUpdates,
+          'priceChanges': value,
+        },
+      );
+    } catch (e) {
+      _priceChanges = previous;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Resets state on sign out.
+  void clear() {
+    _inquiryUpdates = true;
+    _priceChanges = true;
+    _isLoading = false;
+    _errorMessage = null;
+    notifyListeners();
   }
 }

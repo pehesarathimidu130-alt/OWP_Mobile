@@ -7,7 +7,9 @@ import 'package:oleena/core/auth_provider.dart';
 import 'package:oleena/core/session_events.dart';
 import 'package:oleena/features/profile/widgets/notification_preferences_card.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:oleena/core/inquiry_api_service.dart';
+import 'package:oleena/features/profile/providers/notification_preferences_provider.dart';
 
 class MockHttpClient extends http.BaseClient {
   final Future<http.Response> Function(http.BaseRequest request) handler;
@@ -123,17 +125,22 @@ void main() {
   });
 
   group('NotificationPreferencesCard widget', () {
-    testWidgets('renders Coming soon badge and disabled switches for Inquiry Updates and Favourite Price Changes only', (tester) async {
+    testWidgets('renders active switches for Inquiry Updates and Favourite Price Changes without Coming soon badge', (tester) async {
+      final prefsProvider = NotificationPreferencesProvider();
+
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: NotificationPreferencesCard(),
+        ChangeNotifierProvider<NotificationPreferencesProvider>.value(
+          value: prefsProvider,
+          child: const MaterialApp(
+            home: Scaffold(
+              body: NotificationPreferencesCard(),
+            ),
           ),
         ),
       );
 
-      // Verify Coming soon badge exists
-      expect(find.text('Coming soon'), findsOneWidget);
+      // Verify Coming soon badge does NOT exist
+      expect(find.text('Coming soon'), findsNothing);
 
       // Verify the 2 supported category labels exist
       expect(find.text('Inquiry Updates'), findsOneWidget);
@@ -145,12 +152,12 @@ void main() {
       expect(find.text('Wedding Reminders'), findsNothing);
       expect(find.text('New Offers & Packages'), findsNothing);
 
-      // Verify all Switch widgets have onChanged == null (disabled)
+      // Verify all Switch widgets have onChanged != null (enabled and interactive)
       final switches = tester.widgetList<Switch>(find.byType(Switch));
       expect(switches.length, equals(2));
       for (final s in switches) {
-        expect(s.onChanged, isNull, reason: 'All switches must be disabled with no fake local persistence');
-        expect(s.value, isFalse);
+        expect(s.onChanged, isNotNull, reason: 'All switches must be enabled and connected to provider');
+        expect(s.value, isTrue);
       }
     });
   });

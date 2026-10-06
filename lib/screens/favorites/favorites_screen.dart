@@ -4,14 +4,20 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth_provider.dart';
 import '../../core/favorites_provider.dart';
+import '../../core/friendly_error.dart';
 import '../../core/theme.dart';
 import '../../widgets/listing_card.dart';
 
 /// Dynamic "My Favourites" screen showing saved listings from the Neon PostgreSQL database.
 class FavoritesScreen extends StatefulWidget {
+  final bool isActive;
   final VoidCallback? onExploreTap;
 
-  const FavoritesScreen({super.key, this.onExploreTap});
+  const FavoritesScreen({
+    super.key,
+    this.isActive = false,
+    this.onExploreTap,
+  });
 
   @override
   State<FavoritesScreen> createState() => _FavoritesScreenState();
@@ -21,14 +27,30 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
+    if (widget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          final authProvider = context.read<AuthProvider>();
+          if (authProvider.isAuthenticated) {
+            context.read<FavoritesProvider>().fetchFavorites();
+          }
+        }
+      });
+    }
+  }
+
+  @override
+  void didUpdateWidget(covariant FavoritesScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
         final authProvider = context.read<AuthProvider>();
         if (authProvider.isAuthenticated) {
           context.read<FavoritesProvider>().fetchFavorites();
         }
-      }
-    });
+      });
+    }
   }
 
   void _navigateToExplore(BuildContext context) {
@@ -59,14 +81,6 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
         backgroundColor: Colors.white,
         elevation: 0,
         scrolledUnderElevation: 1,
-        actions: [
-          if (isAuthenticated)
-            IconButton(
-              icon: const Icon(Icons.refresh_rounded, color: OleenaTheme.primary),
-              tooltip: 'Refresh favourites',
-              onPressed: () => favProvider.fetchFavorites(),
-            ),
-        ],
       ),
       body: SafeArea(
         child: _buildContent(context, isAuthenticated, favProvider),
@@ -74,32 +88,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     );
   }
 
-  String _friendlyErrorMessage(String? raw) {
-    if (raw == null || raw.trim().isEmpty) {
-      return 'Could not reach the server. Please check your connection.';
-    }
-    final lower = raw.toLowerCase();
-    if (lower.contains('401') || lower.contains('unauthorized') || lower.contains('session')) {
-      return 'Your session has expired. Please sign in again.';
-    }
-    if (lower.contains('500') ||
-        lower.contains('502') ||
-        lower.contains('503') ||
-        lower.contains('504') ||
-        lower.contains('server error')) {
-      return 'Server error. Please try again later.';
-    }
-    if (lower.contains('network') ||
-        lower.contains('socket') ||
-        lower.contains('connection') ||
-        lower.contains('timed out') ||
-        lower.contains('cannot reach') ||
-        lower.contains('failed host lookup') ||
-        lower.contains('unreachable')) {
-      return 'Could not reach the server. Please check your connection.';
-    }
-    return raw;
-  }
+
 
   Widget _buildContent(
     BuildContext context,
@@ -203,7 +192,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
 
     // 3. Error State
     if (favProvider.errorMessage != null && favProvider.favoriteListings.isEmpty) {
-      final friendlyError = _friendlyErrorMessage(favProvider.errorMessage);
+      final friendlyError = friendlyErrorMessage(favProvider.errorMessage);
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),

@@ -9,6 +9,7 @@ import '../../core/api_service.dart';
 import '../../core/app_config.dart';
 import '../../core/auth_provider.dart';
 import '../../core/favorites_provider.dart';
+import '../../core/notifications_provider.dart';
 import '../../core/theme.dart';
 import '../../features/venue/widgets/explore_filter_sheet.dart';
 import '../../models/listing_model.dart';
@@ -24,7 +25,7 @@ class ExploreScreen extends StatefulWidget {
   State<ExploreScreen> createState() => _ExploreScreenState();
 }
 
-class _ExploreScreenState extends State<ExploreScreen> {
+class _ExploreScreenState extends State<ExploreScreen> with WidgetsBindingObserver {
   final ApiService _apiService = ApiService();
   final TextEditingController _searchController = TextEditingController();
 
@@ -47,19 +48,31 @@ class _ExploreScreenState extends State<ExploreScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _fetchListings();
     _searchController.addListener(_applyFilters);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && context.read<AuthProvider>().isAuthenticated) {
         context.read<FavoritesProvider>().fetchFavorites();
+        context.read<NotificationsProvider>().fetchUnreadCount();
       }
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      if (mounted && context.read<AuthProvider>().isAuthenticated) {
+        context.read<NotificationsProvider>().fetchUnreadCount();
+      }
+    }
   }
 
   void _showServerConfigSheet() {
@@ -389,15 +402,54 @@ class _ExploreScreenState extends State<ExploreScreen> {
                 scrolledUnderElevation: 1,
                 backgroundColor: Colors.white,
                 title: Text(
-                  'Oleena',
+                  'OLEENA',
                   style: GoogleFonts.playfairDisplay(
                     fontSize: 24,
                     fontWeight: FontWeight.w700,
                     color: OleenaTheme.primary,
-                    letterSpacing: 0.5,
+                    letterSpacing: 1.2,
                   ),
                 ),
                 actions: [
+                  if (context.watch<AuthProvider>().isAuthenticated)
+                    Builder(
+                      builder: (context) {
+                        final unreadCount = context.watch<NotificationsProvider>().unreadCount;
+                        return Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.notifications_outlined, color: OleenaTheme.textDark),
+                              tooltip: 'Notifications',
+                              onPressed: () => context.push('/notifications'),
+                            ),
+                            if (unreadCount > 0)
+                              Positioned(
+                                top: 10,
+                                right: 10,
+                                child: Container(
+                                  padding: const EdgeInsets.all(4),
+                                  decoration: const BoxDecoration(
+                                    color: OleenaTheme.primary,
+                                    shape: BoxShape.circle,
+                                  ),
+                                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                                  child: Text(
+                                    unreadCount > 99 ? '99+' : '$unreadCount',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.poppins(
+                                      color: Colors.white,
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w700,
+                                      height: 1,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
                   IconButton(
                     icon: const Icon(Icons.favorite_outline_rounded, color: OleenaTheme.textDark),
                     tooltip: 'Favourites',
@@ -495,50 +547,21 @@ class _ExploreScreenState extends State<ExploreScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Results count & active sort indicator
+                      // Results count
                       Row(
                         children: [
-                          Text(
-                            _isLoading
-                                ? 'Finding listings...'
-                                : '${_filteredListings.length} ${_filteredListings.length == 1 ? 'package' : 'packages'} found',
-                            style: GoogleFonts.poppins(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w500,
-                              color: Colors.grey.shade600,
-                            ),
-                          ),
-                          const Spacer(),
-                          InkWell(
-                            onTap: _openSortFilterSheet,
-                            borderRadius: BorderRadius.circular(8),
-                            child: Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Icon(
-                                    _filterCriteria.sortOption.icon,
-                                    size: 14,
-                                    color: _filterCriteria.sortOption != ExploreSortOption.recommended
-                                        ? OleenaTheme.primary
-                                        : Colors.grey.shade600,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    _filterCriteria.sortOption.label,
-                                    style: GoogleFonts.poppins(
-                                      fontSize: 11,
-                                      fontWeight: _filterCriteria.sortOption != ExploreSortOption.recommended
-                                          ? FontWeight.w600
-                                          : FontWeight.w500,
-                                      color: _filterCriteria.sortOption != ExploreSortOption.recommended
-                                          ? OleenaTheme.primary
-                                          : Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ],
+                          Expanded(
+                            child: Text(
+                              _isLoading
+                                  ? 'Finding listings...'
+                                  : '${_filteredListings.length} ${_filteredListings.length == 1 ? 'package' : 'packages'} found',
+                              style: GoogleFonts.poppins(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                                color: Colors.grey.shade600,
                               ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],

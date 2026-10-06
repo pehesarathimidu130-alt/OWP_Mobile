@@ -18,6 +18,9 @@ class MockAuthProvider extends ChangeNotifier implements AuthProvider {
   bool get isAuthenticated => _auth;
 
   @override
+  String? get profilePhotoUrl => null;
+
+  @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 

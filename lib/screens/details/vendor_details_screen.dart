@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../core/api_service.dart';
-import '../../core/auth_gate.dart';
+import '../../core/auth_provider.dart';
+import '../../core/favorites_provider.dart';
 import '../../core/theme.dart';
+import '../../models/listing_model.dart';
 import '../../models/public_vendor_profile.dart';
 import '../../models/vendor.dart';
+import '../../widgets/ensure_logged_in.dart';
+import '../../widgets/masked_contact.dart';
 import '../inquiries/send_inquiry_screen.dart';
+import '../../features/venue/widgets/full_screen_image_viewer.dart';
 
 /// Full dynamic Vendor Details Screen for Mobile Customers.
 /// Displays live vendor business profile details, business hours (open/closed),
@@ -31,15 +37,27 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
   PublicVendorProfile? _profile;
   bool _isLoading = true;
   String? _errorMessage;
+  bool _wasAuthenticated = false;
 
-  late bool _isFavorite;
   late final AnimationController _heartCtrl;
   late final Animation<double> _heartScale;
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final isAuth =
+        Provider.of<AuthProvider?>(context, listen: true)?.isAuthenticated ?? false;
+    if (isAuth && !_wasAuthenticated) {
+      _wasAuthenticated = true;
+      _fetchProfile(silent: true);
+    } else if (!isAuth) {
+      _wasAuthenticated = false;
+    }
+  }
+
+  @override
   void initState() {
     super.initState();
-    _isFavorite = widget.vendor.isFavorite;
 
     _heartCtrl = AnimationController(
       vsync: this,
@@ -62,11 +80,13 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
     super.dispose();
   }
 
-  Future<void> _fetchProfile() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
+  Future<void> _fetchProfile({bool silent = false}) async {
+    if (!silent) {
+      setState(() {
+        _isLoading = true;
+        _errorMessage = null;
+      });
+    }
 
     final vendorId = int.tryParse(widget.vendor.id) ?? 1;
 
@@ -93,17 +113,55 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
     }
   }
 
-  void _toggleHeart() {
-    requireLogin(
+  void _toggleHeart() async {
+    final ok = await ensureLoggedIn(
       context,
-      reason: 'Sign in to save ${widget.vendor.name} to your favourites',
-      icon: Icons.favorite_border_rounded,
-      onSuccess: () {
-        setState(() => _isFavorite = !_isFavorite);
-        _heartCtrl.forward(from: 0);
-        widget.onFavoriteToggled?.call();
-      },
+      message: 'You need to register or log in to save favourites.',
     );
+    if (!ok || !mounted) return;
+
+    _fetchProfile(silent: true);
+    final favProvider = context.read<FavoritesProvider>();
+    final listing = Listing(
+      id: widget.vendor.id,
+      serviceId: int.tryParse(widget.vendor.id) ?? 0,
+      title: widget.vendor.name,
+      category: widget.vendor.category,
+      categoryId: 0,
+      categoryIcon: widget.vendor.categoryIcon,
+      coverImageUrl: widget.vendor.imageUrl,
+      description: widget.vendor.description,
+      shortDescription: '',
+      priceFrom: widget.vendor.priceFrom,
+      isPriceOnRequest: widget.vendor.priceFrom <= 0,
+      images: [],
+      vendor: VendorInfo(
+        id: widget.vendor.id,
+        vendorId: int.tryParse(widget.vendor.id) ?? 0,
+        name: widget.vendor.name,
+        location: widget.vendor.location,
+        city: widget.vendor.city,
+        logoUrl: widget.vendor.logoUrl,
+        coverImageUrl: widget.vendor.coverImageUrl,
+        rating: widget.vendor.rating,
+        reviewCount: widget.vendor.reviewCount,
+        yearsInBusiness: 0,
+        isApproved: widget.vendor.isFeatured,
+      ),
+    );
+
+    _heartCtrl.forward(from: 0);
+    try {
+      await favProvider.toggleFavorite(listing);
+      await favProvider.fetchFavorites();
+      widget.onFavoriteToggled?.call();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not update favourite: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -125,6 +183,9 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
     final description = (profile?.description != null && profile!.description!.isNotEmpty)
         ? profile.description!
         : vendor.description;
+    
+    final favProvider = context.watch<FavoritesProvider>();
+    final isFavorite = favProvider.isFavorite(int.tryParse(vendor.id) ?? 0);
 
     return Scaffold(
       backgroundColor: const Color(0xFFFBF9F7),
@@ -268,7 +329,8 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
                       const SizedBox(height: 6),
 
                       // Rating & Location Subtitle
-                      Row(
+                      Wrap(
+                        crossAxisAlignment: WrapCrossAlignment.center,
                         children: [
                           const Icon(Icons.star_rounded, size: 18, color: Color(0xFFF59E0B)),
                           const SizedBox(width: 4),
@@ -292,16 +354,14 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
                           const SizedBox(width: 10),
                           const Icon(Icons.location_on_outlined, size: 14, color: OleenaTheme.primary),
                           const SizedBox(width: 3),
-                          Expanded(
-                            child: Text(
-                              profile?.location ?? vendor.location,
-                              style: GoogleFonts.poppins(
-                                fontSize: 12,
-                                color: OleenaTheme.textMuted,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
+                          Text(
+                            profile?.location ?? vendor.location,
+                            style: GoogleFonts.poppins(
+                              fontSize: 12,
+                              color: OleenaTheme.textMuted,
                             ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ],
                       ),
@@ -415,8 +475,8 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
                 ScaleTransition(
                   scale: _heartScale,
                   child: _CircleButton(
-                    icon: _isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    iconColor: _isFavorite ? const Color(0xFFFF3366) : OleenaTheme.textDark,
+                    icon: isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    iconColor: isFavorite ? const Color(0xFFFF3366) : OleenaTheme.textDark,
                     onTap: _toggleHeart,
                   ),
                 ),
@@ -459,7 +519,7 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
                           ),
                         ),
                         Text(
-                          vendor.formattedPrice,
+                          vendor.priceFrom <= 0 ? 'On request' : vendor.formattedPrice,
                           style: GoogleFonts.poppins(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
@@ -471,30 +531,40 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
                       ],
                     ),
                   ),
-                  ElevatedButton.icon(
-                    onPressed: () => requireLogin(
-                      context,
-                      reason: 'Sign in to send inquiries to ${vendor.name}',
-                      icon: Icons.chat_bubble_outline_rounded,
-                      onSuccess: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => SendInquiryScreen(
-                            vendor: vendor,
-                            vendorId: int.tryParse(vendor.id),
-                          ),
+                  Flexible(
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        final ok = await ensureLoggedIn(
+                          context,
+                          message: 'You need to register or log in to send an inquiry.',
+                        );
+                        if (ok && context.mounted) {
+                          _fetchProfile(silent: true);
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => SendInquiryScreen(
+                                vendor: vendor,
+                                vendorId: int.tryParse(vendor.id),
+                              ),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.send_rounded, size: 16),
+                      label: const Text(
+                        'Send Inquiry',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: OleenaTheme.primary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
                         ),
+                        elevation: 0,
                       ),
-                    ),
-                    icon: const Icon(Icons.send_rounded, size: 16),
-                    label: const Text('Send Inquiry'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: OleenaTheme.primary,
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      elevation: 0,
                     ),
                   ),
                 ],
@@ -515,12 +585,14 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
           Icon(icon, size: 18, color: OleenaTheme.primary),
           const SizedBox(width: 8),
         ],
-        Text(
-          title,
-          style: GoogleFonts.playfairDisplay(
-            fontSize: 19,
-            fontWeight: FontWeight.w700,
-            color: OleenaTheme.textDark,
+        Expanded(
+          child: Text(
+            title,
+            style: GoogleFonts.playfairDisplay(
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              color: OleenaTheme.textDark,
+            ),
           ),
         ),
         if (badgeCount != null && badgeCount > 0) ...[
@@ -561,9 +633,11 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
             child: CircularProgressIndicator(strokeWidth: 2, color: OleenaTheme.primary),
           ),
           const SizedBox(width: 14),
-          Text(
-            'Syncing live business & performance data...',
-            style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
+          Expanded(
+            child: Text(
+              'Syncing live business & performance data...',
+              style: GoogleFonts.poppins(fontSize: 12, color: Colors.grey.shade600),
+            ),
           ),
         ],
       ),
@@ -599,6 +673,10 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
 
   /// Renders Business Profile details (Address, Contact, Service Areas, Travel Policy, Years in Business)
   Widget _buildBusinessInfoCard(PublicVendorProfile profile) {
+    final isGuest =
+        !(Provider.of<AuthProvider?>(context, listen: true)?.isAuthenticated ?? false);
+    final hideContact = profile.contactHidden;
+
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
@@ -627,14 +705,14 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
           const Divider(height: 20),
           if (profile.ownerName != null && profile.ownerName!.isNotEmpty)
             _buildInfoRow(Icons.person_outline_rounded, 'Owner / Manager', profile.ownerName!),
-          if (profile.contactNumber != null && profile.contactNumber!.isNotEmpty)
-            _buildInfoRow(Icons.phone_outlined, 'Primary Contact', profile.contactNumber!),
-          if (profile.altPhoneNumber != null && profile.altPhoneNumber!.isNotEmpty)
-            _buildInfoRow(Icons.phone_iphone_rounded, 'Alt Phone', profile.altPhoneNumber!),
-          if (profile.email != null && profile.email!.isNotEmpty)
-            _buildInfoRow(Icons.email_outlined, 'Business Email', profile.email!),
-          if (profile.websiteUrl != null && profile.websiteUrl!.isNotEmpty)
-            _buildInfoRow(Icons.language_rounded, 'Website', profile.websiteUrl!),
+          if (profile.contactNumber != null || isGuest || hideContact)
+            _buildMaskedInfoRow(Icons.phone_outlined, 'Primary Contact', profile.contactNumber, hideContact),
+          if (profile.altPhoneNumber != null || isGuest || hideContact)
+            _buildMaskedInfoRow(Icons.phone_iphone_rounded, 'Alt Phone', profile.altPhoneNumber, hideContact),
+          if (profile.email != null || isGuest || hideContact)
+            _buildMaskedInfoRow(Icons.email_outlined, 'Business Email', profile.email, hideContact),
+          if (profile.websiteUrl != null || isGuest || hideContact)
+            _buildMaskedInfoRow(Icons.language_rounded, 'Website', profile.websiteUrl, hideContact),
           if (profile.address != null && profile.address!.isNotEmpty)
             _buildInfoRow(Icons.place_outlined, 'Address', '${profile.address!}, ${profile.location}'),
           if (profile.yearsInBusiness != null && profile.yearsInBusiness! > 0)
@@ -643,6 +721,52 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
             _buildInfoRow(Icons.map_outlined, 'Service Areas', profile.serviceAreas!),
           if (profile.travelPolicy != null && profile.travelPolicy!.isNotEmpty)
             _buildInfoRow(Icons.flight_takeoff_rounded, 'Travel Policy', profile.travelPolicy!),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMaskedInfoRow(IconData icon, String label, String? value, bool contactHidden) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: const BoxDecoration(
+              color: OleenaTheme.primaryTint,
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, size: 14, color: OleenaTheme.primary),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: GoogleFonts.poppins(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                    color: OleenaTheme.textMuted,
+                  ),
+                ),
+                MaskedContact(
+                  value: value,
+                  contactHidden: contactHidden,
+                  message: 'You need to register or log in to view this.',
+                  onAuthSuccess: () => _fetchProfile(silent: true),
+                  style: GoogleFonts.poppins(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w500,
+                    color: OleenaTheme.textDark,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -750,10 +874,12 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
               color: isOpenToday ? const Color(0xFFECFDF5) : const Color(0xFFFEF2F2),
               borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
             ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
                       isOpenToday ? Icons.check_circle_rounded : Icons.cancel_rounded,
@@ -761,16 +887,19 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
                       color: isOpenToday ? const Color(0xFF059669) : const Color(0xFFDC2626),
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      isOpenToday ? 'Open Today (${todayItem.day})' : 'Closed Today (${todayItem.day})',
-                      style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        color: isOpenToday ? const Color(0xFF065F46) : const Color(0xFF991B1B),
+                    Flexible(
+                      child: Text(
+                        isOpenToday ? 'Open Today (${todayItem.day})' : 'Closed Today (${todayItem.day})',
+                        style: GoogleFonts.poppins(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: isOpenToday ? const Color(0xFF065F46) : const Color(0xFF991B1B),
+                        ),
                       ),
                     ),
                   ],
                 ),
+                const SizedBox(width: 8),
                 Text(
                   todayItem.displayLine,
                   style: GoogleFonts.poppins(
@@ -794,12 +923,14 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        item.day,
-                        style: GoogleFonts.poppins(
-                          fontSize: 12.5,
-                          fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
-                          color: isToday ? OleenaTheme.primary : OleenaTheme.textDark,
+                      Expanded(
+                        child: Text(
+                          item.day,
+                          style: GoogleFonts.poppins(
+                            fontSize: 12.5,
+                            fontWeight: isToday ? FontWeight.w700 : FontWeight.w500,
+                            color: isToday ? OleenaTheme.primary : OleenaTheme.textDark,
+                          ),
                         ),
                       ),
                       Container(
@@ -892,17 +1023,30 @@ class _VendorDetailsScreenState extends State<VendorDetailsScreen>
                 children: [
                   // Event Showcase Photo
                   if (perf.photoUrl != null && perf.photoUrl!.isNotEmpty) ...[
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: SizedBox(
-                        width: 80,
-                        height: 80,
-                        child: Image.network(
-                          perf.photoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => Container(
-                            color: Colors.grey.shade200,
-                            child: const Icon(Icons.image_not_supported_outlined, size: 24, color: Colors.grey),
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => FullScreenImageViewer(
+                              imageUrls: [perf.photoUrl!],
+                              title: perf.title,
+                            ),
+                          ),
+                        );
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: SizedBox(
+                          width: 80,
+                          height: 80,
+                          child: Image.network(
+                            perf.photoUrl!,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) => Container(
+                              color: Colors.grey.shade200,
+                              child: const Icon(Icons.image_not_supported_outlined, size: 24, color: Colors.grey),
+                            ),
                           ),
                         ),
                       ),
