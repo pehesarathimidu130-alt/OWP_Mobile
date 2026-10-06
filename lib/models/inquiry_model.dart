@@ -14,6 +14,8 @@ class Inquiry {
   final String? message;
   final String? attachmentUrl;
   final String status;
+  final String? vendorReply;
+  final DateTime? repliedAt;
   final DateTime? createdAt;
 
   const Inquiry({
@@ -29,11 +31,15 @@ class Inquiry {
     this.message,
     this.attachmentUrl,
     required this.status,
+    this.vendorReply,
+    this.repliedAt,
     this.createdAt,
   });
 
   bool get isPending => status.toLowerCase() == 'pending';
   bool get isReplied => status.toLowerCase() == 'replied';
+  bool get hasVendorReply =>
+      vendorReply != null && vendorReply!.trim().isNotEmpty;
 
   String get formattedBudget {
     if (budget == null || budget! <= 0) return 'Not specified';
@@ -56,6 +62,16 @@ class Inquiry {
   String get formattedCreatedDate {
     if (createdAt == null) return '';
     final d = createdAt!.toLocal();
+    final months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+    ];
+    return '${d.day} ${months[d.month - 1]} ${d.year}';
+  }
+
+  String get formattedRepliedDate {
+    if (repliedAt == null) return '';
+    final d = repliedAt!.toLocal();
     final months = [
       'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
@@ -109,6 +125,8 @@ class Inquiry {
       message: json['message']?.toString(),
       attachmentUrl: _resolveMediaUrl(json['attachmentUrl']?.toString()),
       status: json['status']?.toString() ?? 'Pending',
+      vendorReply: json['vendorReply']?.toString() ?? json['vendorResponse']?.toString(),
+      repliedAt: parseDate(json['repliedAt'] ?? json['respondedAt']),
       createdAt: parseDate(json['createdAt']),
     );
   }
