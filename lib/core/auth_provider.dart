@@ -66,9 +66,11 @@ class AuthProvider extends ChangeNotifier {
         _fullName = await _storage.read(key: 'user_full_name');
         _email = await _storage.read(key: 'user_email');
         _role = await _storage.read(key: 'user_role');
+        final cidStr = await _storage.read(key: 'user_customer_id');
+        if (cidStr != null) _customerId = int.tryParse(cidStr);
 
         // If metadata is missing from storage, decode from JWT claims
-        if (_fullName == null || _email == null) {
+        if (_fullName == null || _email == null || _customerId == null) {
           _extractFromJwt(storedToken);
         }
       } else {
@@ -76,6 +78,7 @@ class AuthProvider extends ChangeNotifier {
         _isAuthenticated = false;
         _fullName = null;
         _email = null;
+        _customerId = null;
       }
     } catch (_) {
       _token = null;
@@ -178,6 +181,9 @@ class AuthProvider extends ChangeNotifier {
       if (_role != null) {
         await _storage.write(key: 'user_role', value: _role!);
       }
+      if (_customerId != null) {
+        await _storage.write(key: 'user_customer_id', value: _customerId.toString());
+      }
 
       // Reset unauthorized guard on successful authentication
       SessionEvents.resetUnauthorizedGuard();
@@ -203,6 +209,15 @@ class AuthProvider extends ChangeNotifier {
 
         _role ??= claims['http://schemas.microsoft.com/ws/2008/06/identity/claims/role']?.toString() ??
             claims['role']?.toString();
+
+        if (_customerId == null) {
+          final idClaim = claims['http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier']?.toString() ??
+              claims['nameid']?.toString() ??
+              claims['id']?.toString() ??
+              claims['userId']?.toString() ??
+              claims['customerId']?.toString();
+          if (idClaim != null) _customerId = int.tryParse(idClaim);
+        }
       }
     } catch (_) {
       // Ignored if malformed

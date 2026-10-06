@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -201,7 +201,7 @@ class ApiService {
     }
   }
 
-  // ─── Domain-specific helpers ───────────────────────────────────────────────
+  // â”€â”€â”€ Domain-specific helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Fetches business services / packages from GET /api/listings
   Future<List<Listing>> fetchListings({String? category, String? search}) async {
@@ -454,7 +454,7 @@ class ApiService {
     await delete('/inquiries/$inquiryId');
   }
 
-  // ─── Vendor Ratings ─────────────────────────────────────────────────────────
+  // â”€â”€â”€ Vendor Ratings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   /// Submits or updates a rating (1-5) for a vendor
   Future<Map<String, dynamic>> submitVendorRating({
@@ -486,7 +486,7 @@ class ApiService {
     }
   }
 
-  // ─── Internal Response Processing ──────────────────────────────────────────
+  // â”€â”€â”€ Internal Response Processing â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   dynamic _processResponse(http.Response response, {bool hasAuthHeader = false}) {
     final statusCode = response.statusCode;
@@ -513,5 +513,53 @@ class ApiService {
     }
 
     throw ApiException.fromResponse(statusCode, decodedBody);
+  }
+  // ── Flag / Report Listing API ─────────────────────────────────────────────
+
+  /// Checks whether the given user has already flagged a specific listing.
+  /// Returns `true` if reported, `false` otherwise.
+  Future<bool> checkIfReported({
+    required int listingId,
+    required int userId,
+  }) async {
+    try {
+      final response = await get(
+        '/flags/check',
+        queryParams: {'listingId': listingId, 'userId': userId},
+      );
+      if (response is Map<String, dynamic>) {
+        return response['hasReported'] as bool? ?? false;
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Submits a new flag/report for a listing.
+  /// Throws [ApiException] on network error or duplicate (409 Conflict).
+  Future<int> submitFlag({
+    required int listingId,
+    required int reporterUserId,
+    required int vendorId,
+    required String contentTitle,
+    required String reason,
+    String contentType = 'Listing',
+    String? comments,
+  }) async {
+    final body = <String, dynamic>{
+      'listingId': listingId,
+      'reporterUserId': reporterUserId,
+      'vendorId': vendorId,
+      'contentType': contentType,
+      'contentTitle': contentTitle,
+      'reason': reason,
+      if (comments != null && comments.isNotEmpty) 'comments': comments,
+    };
+    final response = await post('/flags', body: body);
+    if (response is Map<String, dynamic>) {
+      return response['id'] as int? ?? 0;
+    }
+    return 0;
   }
 }
