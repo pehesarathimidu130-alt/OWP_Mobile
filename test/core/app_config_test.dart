@@ -19,11 +19,9 @@ void main() {
       expect(AppConfig.backendPort, equals('5131'));
     });
 
-    test('BaseUrl contains port 5131 and /api path', () {
+    test('BaseUrl defaults to live Railway backend URL', () {
       final url = AppConfig.baseUrl;
-      expect(url, startsWith('http'));
-      expect(url, contains('5131'));
-      expect(url, endsWith('/api'));
+      expect(url, equals('https://owpbackend-production.up.railway.app/api'));
     });
 
     test('setHostIp updates currentHost and baseUrl', () async {
